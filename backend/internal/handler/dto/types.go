@@ -432,6 +432,10 @@ type UsageLog struct {
 	InboundEndpoint *string `json:"inbound_endpoint,omitempty"`
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
+	VegaScanID       *string `json:"vega_scan_id,omitempty"`
+	VegaProjectID    *string `json:"vega_project_id,omitempty"`
+	VegaRequestID    *string `json:"vega_request_id,omitempty"`
+	VegaRunnerID     *string `json:"vega_runner_id,omitempty"`
 
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`

@@ -5761,6 +5761,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
+	vegaMetadata := VegaUsageMetadataFromContext(ctx)
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
@@ -5780,6 +5781,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ReasoningEffort:     result.ReasoningEffort,
 		InboundEndpoint:     optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:    optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		VegaScanID:          optionalTrimmedStringPtr(vegaMetadata.ScanID),
+		VegaProjectID:       optionalTrimmedStringPtr(vegaMetadata.ProjectID),
+		VegaRequestID:       optionalTrimmedStringPtr(vegaMetadata.RequestID),
+		VegaRunnerID:        optionalTrimmedStringPtr(vegaMetadata.RunnerID),
 		InputTokens:         actualInputTokens,
 		OutputTokens:        result.Usage.OutputTokens,
 		CacheCreationTokens: result.Usage.CacheCreationInputTokens,

@@ -270,6 +270,8 @@ type UsageLogFilters struct {
 	Stream      *bool
 	BillingType *int8
 	BillingMode string
+	VegaScanID  string
+	VegaProjectID string
 	StartTime   *time.Time
 	EndTime     *time.Time
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.

@@ -33,6 +33,7 @@ import (
 )
 
 const gatewayCompatibilityMetricsLogInterval = 1024
+const billingErrorCodeHeader = "X-Sub2API-Billing-Error-Code"
 
 var gatewayCompatibilityMetricsLogCounter atomic.Uint64
 
@@ -253,6 +254,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 2. 【新增】Wait后二次检查余额/订阅
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
+		setBillingErrorContext(c, err)
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
@@ -813,6 +815,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
 						if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackAPIKey.User, fallbackAPIKey, fallbackGroup, nil, service.PlatformFromAPIKey(fallbackAPIKey)); err != nil {
+							setBillingErrorContext(c, err)
 							status, code, message, retryAfter := billingErrorDetails(err)
 							if retryAfter > 0 {
 								c.Header("Retry-After", strconv.Itoa(retryAfter))
@@ -1558,7 +1561,11 @@ func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, e
 		flusher, ok := c.Writer.(http.Flusher)
 		if ok {
 			// SSE 错误事件固定 schema，使用 Quote 直拼可避免额外 Marshal 分配。
-			errorEvent := `data: {"type":"error","error":{"type":` + strconv.Quote(errType) + `,"message":` + strconv.Quote(message) + `}}` + "\n\n"
+			codeFragment := ""
+			if code := strings.TrimSpace(c.Writer.Header().Get(billingErrorCodeHeader)); code != "" {
+				codeFragment = `,"code":` + strconv.Quote(code)
+			}
+			errorEvent := `data: {"type":"error","error":{"type":` + strconv.Quote(errType) + codeFragment + `,"message":` + strconv.Quote(message) + `}}` + "\n\n"
 			if _, err := fmt.Fprint(c.Writer, errorEvent); err != nil {
 				_ = c.Error(err)
 			}
@@ -1632,12 +1639,14 @@ func (h *GatewayHandler) checkClaudeCodeVersion(c *gin.Context) bool {
 
 // errorResponse 返回Claude API格式的错误响应
 func (h *GatewayHandler) errorResponse(c *gin.Context, status int, errType, message string) {
+	errObj := gin.H{
+		"type":    errType,
+		"message": message,
+	}
+	addStructuredErrorCode(c, errObj)
 	c.JSON(status, gin.H{
-		"type": "error",
-		"error": gin.H{
-			"type":    errType,
-			"message": message,
-		},
+		"type":  "error",
+		"error": errObj,
 	})
 }
 
@@ -1709,6 +1718,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	// 校验 billing eligibility（订阅/余额）
 	// 【注意】不计算并发，但需要校验订阅/余额
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
+		setBillingErrorContext(c, err)
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
 			c.Header("Retry-After", strconv.Itoa(retryAfter))
@@ -2030,6 +2040,24 @@ func billingErrorDetails(err error) (status int, code, message string, retryAfte
 		msg = "Billing error"
 	}
 	return http.StatusForbidden, "billing_error", msg, 0
+}
+
+func setBillingErrorContext(c *gin.Context, err error) {
+	if c == nil || err == nil {
+		return
+	}
+	if reason := strings.TrimSpace(pkgerrors.Reason(err)); reason != "" {
+		c.Header(billingErrorCodeHeader, reason)
+	}
+}
+
+func addStructuredErrorCode(c *gin.Context, errObj gin.H) {
+	if c == nil || errObj == nil {
+		return
+	}
+	if code := strings.TrimSpace(c.Writer.Header().Get(billingErrorCodeHeader)); code != "" {
+		errObj["code"] = code
+	}
 }
 
 func (h *GatewayHandler) metadataBridgeEnabled() bool {

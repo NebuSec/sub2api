@@ -85,6 +85,62 @@ func (_c *UsageLogCreate) SetNillableUpstreamModel(v *string) *UsageLogCreate {
 	return _c
 }
 
+// SetVegaScanID sets the "vega_scan_id" field.
+func (_c *UsageLogCreate) SetVegaScanID(v string) *UsageLogCreate {
+	_c.mutation.SetVegaScanID(v)
+	return _c
+}
+
+// SetNillableVegaScanID sets the "vega_scan_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableVegaScanID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetVegaScanID(*v)
+	}
+	return _c
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (_c *UsageLogCreate) SetVegaProjectID(v string) *UsageLogCreate {
+	_c.mutation.SetVegaProjectID(v)
+	return _c
+}
+
+// SetNillableVegaProjectID sets the "vega_project_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableVegaProjectID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetVegaProjectID(*v)
+	}
+	return _c
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (_c *UsageLogCreate) SetVegaRequestID(v string) *UsageLogCreate {
+	_c.mutation.SetVegaRequestID(v)
+	return _c
+}
+
+// SetNillableVegaRequestID sets the "vega_request_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableVegaRequestID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetVegaRequestID(*v)
+	}
+	return _c
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (_c *UsageLogCreate) SetVegaRunnerID(v string) *UsageLogCreate {
+	_c.mutation.SetVegaRunnerID(v)
+	return _c
+}
+
+// SetNillableVegaRunnerID sets the "vega_runner_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableVegaRunnerID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetVegaRunnerID(*v)
+	}
+	return _c
+}
+
 // SetChannelID sets the "channel_id" field.
 func (_c *UsageLogCreate) SetChannelID(v int64) *UsageLogCreate {
 	_c.mutation.SetChannelID(v)
@@ -724,6 +780,26 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.upstream_model": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.VegaScanID(); ok {
+		if err := usagelog.VegaScanIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_scan_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_scan_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.VegaProjectID(); ok {
+		if err := usagelog.VegaProjectIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_project_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_project_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.VegaRequestID(); ok {
+		if err := usagelog.VegaRequestIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_request_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_request_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.VegaRunnerID(); ok {
+		if err := usagelog.VegaRunnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_runner_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_runner_id": %w`, err)}
+		}
+	}
 	if v, ok := _c.mutation.ModelMappingChain(); ok {
 		if err := usagelog.ModelMappingChainValidator(v); err != nil {
 			return &ValidationError{Name: "model_mapping_chain", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model_mapping_chain": %w`, err)}
@@ -874,6 +950,22 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpstreamModel(); ok {
 		_spec.SetField(usagelog.FieldUpstreamModel, field.TypeString, value)
 		_node.UpstreamModel = &value
+	}
+	if value, ok := _c.mutation.VegaScanID(); ok {
+		_spec.SetField(usagelog.FieldVegaScanID, field.TypeString, value)
+		_node.VegaScanID = &value
+	}
+	if value, ok := _c.mutation.VegaProjectID(); ok {
+		_spec.SetField(usagelog.FieldVegaProjectID, field.TypeString, value)
+		_node.VegaProjectID = &value
+	}
+	if value, ok := _c.mutation.VegaRequestID(); ok {
+		_spec.SetField(usagelog.FieldVegaRequestID, field.TypeString, value)
+		_node.VegaRequestID = &value
+	}
+	if value, ok := _c.mutation.VegaRunnerID(); ok {
+		_spec.SetField(usagelog.FieldVegaRunnerID, field.TypeString, value)
+		_node.VegaRunnerID = &value
 	}
 	if value, ok := _c.mutation.ChannelID(); ok {
 		_spec.SetField(usagelog.FieldChannelID, field.TypeInt64, value)
@@ -1233,6 +1325,78 @@ func (u *UsageLogUpsert) UpdateUpstreamModel() *UsageLogUpsert {
 // ClearUpstreamModel clears the value of the "upstream_model" field.
 func (u *UsageLogUpsert) ClearUpstreamModel() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldUpstreamModel)
+	return u
+}
+
+// SetVegaScanID sets the "vega_scan_id" field.
+func (u *UsageLogUpsert) SetVegaScanID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldVegaScanID, v)
+	return u
+}
+
+// UpdateVegaScanID sets the "vega_scan_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateVegaScanID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldVegaScanID)
+	return u
+}
+
+// ClearVegaScanID clears the value of the "vega_scan_id" field.
+func (u *UsageLogUpsert) ClearVegaScanID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldVegaScanID)
+	return u
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (u *UsageLogUpsert) SetVegaProjectID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldVegaProjectID, v)
+	return u
+}
+
+// UpdateVegaProjectID sets the "vega_project_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateVegaProjectID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldVegaProjectID)
+	return u
+}
+
+// ClearVegaProjectID clears the value of the "vega_project_id" field.
+func (u *UsageLogUpsert) ClearVegaProjectID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldVegaProjectID)
+	return u
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (u *UsageLogUpsert) SetVegaRequestID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldVegaRequestID, v)
+	return u
+}
+
+// UpdateVegaRequestID sets the "vega_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateVegaRequestID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldVegaRequestID)
+	return u
+}
+
+// ClearVegaRequestID clears the value of the "vega_request_id" field.
+func (u *UsageLogUpsert) ClearVegaRequestID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldVegaRequestID)
+	return u
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (u *UsageLogUpsert) SetVegaRunnerID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldVegaRunnerID, v)
+	return u
+}
+
+// UpdateVegaRunnerID sets the "vega_runner_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateVegaRunnerID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldVegaRunnerID)
+	return u
+}
+
+// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
+func (u *UsageLogUpsert) ClearVegaRunnerID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldVegaRunnerID)
 	return u
 }
 
@@ -1996,6 +2160,90 @@ func (u *UsageLogUpsertOne) UpdateUpstreamModel() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearUpstreamModel() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearUpstreamModel()
+	})
+}
+
+// SetVegaScanID sets the "vega_scan_id" field.
+func (u *UsageLogUpsertOne) SetVegaScanID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaScanID(v)
+	})
+}
+
+// UpdateVegaScanID sets the "vega_scan_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateVegaScanID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaScanID()
+	})
+}
+
+// ClearVegaScanID clears the value of the "vega_scan_id" field.
+func (u *UsageLogUpsertOne) ClearVegaScanID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaScanID()
+	})
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (u *UsageLogUpsertOne) SetVegaProjectID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaProjectID(v)
+	})
+}
+
+// UpdateVegaProjectID sets the "vega_project_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateVegaProjectID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaProjectID()
+	})
+}
+
+// ClearVegaProjectID clears the value of the "vega_project_id" field.
+func (u *UsageLogUpsertOne) ClearVegaProjectID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaProjectID()
+	})
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (u *UsageLogUpsertOne) SetVegaRequestID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaRequestID(v)
+	})
+}
+
+// UpdateVegaRequestID sets the "vega_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateVegaRequestID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaRequestID()
+	})
+}
+
+// ClearVegaRequestID clears the value of the "vega_request_id" field.
+func (u *UsageLogUpsertOne) ClearVegaRequestID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaRequestID()
+	})
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (u *UsageLogUpsertOne) SetVegaRunnerID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaRunnerID(v)
+	})
+}
+
+// UpdateVegaRunnerID sets the "vega_runner_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateVegaRunnerID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaRunnerID()
+	})
+}
+
+// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
+func (u *UsageLogUpsertOne) ClearVegaRunnerID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaRunnerID()
 	})
 }
 
@@ -3026,6 +3274,90 @@ func (u *UsageLogUpsertBulk) UpdateUpstreamModel() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearUpstreamModel() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearUpstreamModel()
+	})
+}
+
+// SetVegaScanID sets the "vega_scan_id" field.
+func (u *UsageLogUpsertBulk) SetVegaScanID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaScanID(v)
+	})
+}
+
+// UpdateVegaScanID sets the "vega_scan_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateVegaScanID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaScanID()
+	})
+}
+
+// ClearVegaScanID clears the value of the "vega_scan_id" field.
+func (u *UsageLogUpsertBulk) ClearVegaScanID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaScanID()
+	})
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (u *UsageLogUpsertBulk) SetVegaProjectID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaProjectID(v)
+	})
+}
+
+// UpdateVegaProjectID sets the "vega_project_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateVegaProjectID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaProjectID()
+	})
+}
+
+// ClearVegaProjectID clears the value of the "vega_project_id" field.
+func (u *UsageLogUpsertBulk) ClearVegaProjectID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaProjectID()
+	})
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (u *UsageLogUpsertBulk) SetVegaRequestID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaRequestID(v)
+	})
+}
+
+// UpdateVegaRequestID sets the "vega_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateVegaRequestID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaRequestID()
+	})
+}
+
+// ClearVegaRequestID clears the value of the "vega_request_id" field.
+func (u *UsageLogUpsertBulk) ClearVegaRequestID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaRequestID()
+	})
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (u *UsageLogUpsertBulk) SetVegaRunnerID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetVegaRunnerID(v)
+	})
+}
+
+// UpdateVegaRunnerID sets the "vega_runner_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateVegaRunnerID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateVegaRunnerID()
+	})
+}
+
+// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
+func (u *UsageLogUpsertBulk) ClearVegaRunnerID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearVegaRunnerID()
 	})
 }
 

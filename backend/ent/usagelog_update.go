@@ -142,6 +142,86 @@ func (_u *UsageLogUpdate) ClearUpstreamModel() *UsageLogUpdate {
 	return _u
 }
 
+// SetVegaScanID sets the "vega_scan_id" field.
+func (_u *UsageLogUpdate) SetVegaScanID(v string) *UsageLogUpdate {
+	_u.mutation.SetVegaScanID(v)
+	return _u
+}
+
+// SetNillableVegaScanID sets the "vega_scan_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableVegaScanID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetVegaScanID(*v)
+	}
+	return _u
+}
+
+// ClearVegaScanID clears the value of the "vega_scan_id" field.
+func (_u *UsageLogUpdate) ClearVegaScanID() *UsageLogUpdate {
+	_u.mutation.ClearVegaScanID()
+	return _u
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (_u *UsageLogUpdate) SetVegaProjectID(v string) *UsageLogUpdate {
+	_u.mutation.SetVegaProjectID(v)
+	return _u
+}
+
+// SetNillableVegaProjectID sets the "vega_project_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableVegaProjectID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetVegaProjectID(*v)
+	}
+	return _u
+}
+
+// ClearVegaProjectID clears the value of the "vega_project_id" field.
+func (_u *UsageLogUpdate) ClearVegaProjectID() *UsageLogUpdate {
+	_u.mutation.ClearVegaProjectID()
+	return _u
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (_u *UsageLogUpdate) SetVegaRequestID(v string) *UsageLogUpdate {
+	_u.mutation.SetVegaRequestID(v)
+	return _u
+}
+
+// SetNillableVegaRequestID sets the "vega_request_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableVegaRequestID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetVegaRequestID(*v)
+	}
+	return _u
+}
+
+// ClearVegaRequestID clears the value of the "vega_request_id" field.
+func (_u *UsageLogUpdate) ClearVegaRequestID() *UsageLogUpdate {
+	_u.mutation.ClearVegaRequestID()
+	return _u
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (_u *UsageLogUpdate) SetVegaRunnerID(v string) *UsageLogUpdate {
+	_u.mutation.SetVegaRunnerID(v)
+	return _u
+}
+
+// SetNillableVegaRunnerID sets the "vega_runner_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableVegaRunnerID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetVegaRunnerID(*v)
+	}
+	return _u
+}
+
+// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
+func (_u *UsageLogUpdate) ClearVegaRunnerID() *UsageLogUpdate {
+	_u.mutation.ClearVegaRunnerID()
+	return _u
+}
+
 // SetChannelID sets the "channel_id" field.
 func (_u *UsageLogUpdate) SetChannelID(v int64) *UsageLogUpdate {
 	_u.mutation.ResetChannelID()
@@ -934,6 +1014,26 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.upstream_model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.VegaScanID(); ok {
+		if err := usagelog.VegaScanIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_scan_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_scan_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaProjectID(); ok {
+		if err := usagelog.VegaProjectIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_project_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_project_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaRequestID(); ok {
+		if err := usagelog.VegaRequestIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_request_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_request_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaRunnerID(); ok {
+		if err := usagelog.VegaRunnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_runner_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_runner_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ModelMappingChain(); ok {
 		if err := usagelog.ModelMappingChainValidator(v); err != nil {
 			return &ValidationError{Name: "model_mapping_chain", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model_mapping_chain": %w`, err)}
@@ -1020,6 +1120,30 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.UpstreamModelCleared() {
 		_spec.ClearField(usagelog.FieldUpstreamModel, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaScanID(); ok {
+		_spec.SetField(usagelog.FieldVegaScanID, field.TypeString, value)
+	}
+	if _u.mutation.VegaScanIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaScanID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaProjectID(); ok {
+		_spec.SetField(usagelog.FieldVegaProjectID, field.TypeString, value)
+	}
+	if _u.mutation.VegaProjectIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaProjectID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaRequestID(); ok {
+		_spec.SetField(usagelog.FieldVegaRequestID, field.TypeString, value)
+	}
+	if _u.mutation.VegaRequestIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaRunnerID(); ok {
+		_spec.SetField(usagelog.FieldVegaRunnerID, field.TypeString, value)
+	}
+	if _u.mutation.VegaRunnerIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaRunnerID, field.TypeString)
 	}
 	if value, ok := _u.mutation.ChannelID(); ok {
 		_spec.SetField(usagelog.FieldChannelID, field.TypeInt64, value)
@@ -1485,6 +1609,86 @@ func (_u *UsageLogUpdateOne) SetNillableUpstreamModel(v *string) *UsageLogUpdate
 // ClearUpstreamModel clears the value of the "upstream_model" field.
 func (_u *UsageLogUpdateOne) ClearUpstreamModel() *UsageLogUpdateOne {
 	_u.mutation.ClearUpstreamModel()
+	return _u
+}
+
+// SetVegaScanID sets the "vega_scan_id" field.
+func (_u *UsageLogUpdateOne) SetVegaScanID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetVegaScanID(v)
+	return _u
+}
+
+// SetNillableVegaScanID sets the "vega_scan_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableVegaScanID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetVegaScanID(*v)
+	}
+	return _u
+}
+
+// ClearVegaScanID clears the value of the "vega_scan_id" field.
+func (_u *UsageLogUpdateOne) ClearVegaScanID() *UsageLogUpdateOne {
+	_u.mutation.ClearVegaScanID()
+	return _u
+}
+
+// SetVegaProjectID sets the "vega_project_id" field.
+func (_u *UsageLogUpdateOne) SetVegaProjectID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetVegaProjectID(v)
+	return _u
+}
+
+// SetNillableVegaProjectID sets the "vega_project_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableVegaProjectID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetVegaProjectID(*v)
+	}
+	return _u
+}
+
+// ClearVegaProjectID clears the value of the "vega_project_id" field.
+func (_u *UsageLogUpdateOne) ClearVegaProjectID() *UsageLogUpdateOne {
+	_u.mutation.ClearVegaProjectID()
+	return _u
+}
+
+// SetVegaRequestID sets the "vega_request_id" field.
+func (_u *UsageLogUpdateOne) SetVegaRequestID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetVegaRequestID(v)
+	return _u
+}
+
+// SetNillableVegaRequestID sets the "vega_request_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableVegaRequestID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetVegaRequestID(*v)
+	}
+	return _u
+}
+
+// ClearVegaRequestID clears the value of the "vega_request_id" field.
+func (_u *UsageLogUpdateOne) ClearVegaRequestID() *UsageLogUpdateOne {
+	_u.mutation.ClearVegaRequestID()
+	return _u
+}
+
+// SetVegaRunnerID sets the "vega_runner_id" field.
+func (_u *UsageLogUpdateOne) SetVegaRunnerID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetVegaRunnerID(v)
+	return _u
+}
+
+// SetNillableVegaRunnerID sets the "vega_runner_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableVegaRunnerID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetVegaRunnerID(*v)
+	}
+	return _u
+}
+
+// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
+func (_u *UsageLogUpdateOne) ClearVegaRunnerID() *UsageLogUpdateOne {
+	_u.mutation.ClearVegaRunnerID()
 	return _u
 }
 
@@ -2293,6 +2497,26 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "upstream_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.upstream_model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.VegaScanID(); ok {
+		if err := usagelog.VegaScanIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_scan_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_scan_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaProjectID(); ok {
+		if err := usagelog.VegaProjectIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_project_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_project_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaRequestID(); ok {
+		if err := usagelog.VegaRequestIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_request_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_request_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.VegaRunnerID(); ok {
+		if err := usagelog.VegaRunnerIDValidator(v); err != nil {
+			return &ValidationError{Name: "vega_runner_id", err: fmt.Errorf(`ent: validator failed for field "UsageLog.vega_runner_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.ModelMappingChain(); ok {
 		if err := usagelog.ModelMappingChainValidator(v); err != nil {
 			return &ValidationError{Name: "model_mapping_chain", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model_mapping_chain": %w`, err)}
@@ -2396,6 +2620,30 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.UpstreamModelCleared() {
 		_spec.ClearField(usagelog.FieldUpstreamModel, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaScanID(); ok {
+		_spec.SetField(usagelog.FieldVegaScanID, field.TypeString, value)
+	}
+	if _u.mutation.VegaScanIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaScanID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaProjectID(); ok {
+		_spec.SetField(usagelog.FieldVegaProjectID, field.TypeString, value)
+	}
+	if _u.mutation.VegaProjectIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaProjectID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaRequestID(); ok {
+		_spec.SetField(usagelog.FieldVegaRequestID, field.TypeString, value)
+	}
+	if _u.mutation.VegaRequestIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.VegaRunnerID(); ok {
+		_spec.SetField(usagelog.FieldVegaRunnerID, field.TypeString, value)
+	}
+	if _u.mutation.VegaRunnerIDCleared() {
+		_spec.ClearField(usagelog.FieldVegaRunnerID, field.TypeString)
 	}
 	if value, ok := _u.mutation.ChannelID(); ok {
 		_spec.SetField(usagelog.FieldChannelID, field.TypeInt64, value)

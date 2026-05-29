@@ -8976,6 +8976,7 @@ func (s *GatewayService) buildRecordUsageLog(
 ) *UsageLog {
 	durationMs := int(result.Duration.Milliseconds())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
+	vegaMetadata := VegaUsageMetadataFromContext(ctx)
 	usageLog := &UsageLog{
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
@@ -8987,6 +8988,10 @@ func (s *GatewayService) buildRecordUsageLog(
 		ReasoningEffort:       result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		VegaScanID:            optionalTrimmedStringPtr(vegaMetadata.ScanID),
+		VegaProjectID:         optionalTrimmedStringPtr(vegaMetadata.ProjectID),
+		VegaRequestID:         optionalTrimmedStringPtr(vegaMetadata.RequestID),
+		VegaRunnerID:          optionalTrimmedStringPtr(vegaMetadata.RunnerID),
 		InputTokens:           result.Usage.InputTokens,
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,

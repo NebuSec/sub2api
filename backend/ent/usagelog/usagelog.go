@@ -28,6 +28,14 @@ const (
 	FieldRequestedModel = "requested_model"
 	// FieldUpstreamModel holds the string denoting the upstream_model field in the database.
 	FieldUpstreamModel = "upstream_model"
+	// FieldVegaScanID holds the string denoting the vega_scan_id field in the database.
+	FieldVegaScanID = "vega_scan_id"
+	// FieldVegaProjectID holds the string denoting the vega_project_id field in the database.
+	FieldVegaProjectID = "vega_project_id"
+	// FieldVegaRequestID holds the string denoting the vega_request_id field in the database.
+	FieldVegaRequestID = "vega_request_id"
+	// FieldVegaRunnerID holds the string denoting the vega_runner_id field in the database.
+	FieldVegaRunnerID = "vega_runner_id"
 	// FieldChannelID holds the string denoting the channel_id field in the database.
 	FieldChannelID = "channel_id"
 	// FieldModelMappingChain holds the string denoting the model_mapping_chain field in the database.
@@ -155,6 +163,10 @@ var Columns = []string{
 	FieldModel,
 	FieldRequestedModel,
 	FieldUpstreamModel,
+	FieldVegaScanID,
+	FieldVegaProjectID,
+	FieldVegaRequestID,
+	FieldVegaRunnerID,
 	FieldChannelID,
 	FieldModelMappingChain,
 	FieldBillingTier,
@@ -210,6 +222,14 @@ var (
 	RequestedModelValidator func(string) error
 	// UpstreamModelValidator is a validator for the "upstream_model" field. It is called by the builders before save.
 	UpstreamModelValidator func(string) error
+	// VegaScanIDValidator is a validator for the "vega_scan_id" field. It is called by the builders before save.
+	VegaScanIDValidator func(string) error
+	// VegaProjectIDValidator is a validator for the "vega_project_id" field. It is called by the builders before save.
+	VegaProjectIDValidator func(string) error
+	// VegaRequestIDValidator is a validator for the "vega_request_id" field. It is called by the builders before save.
+	VegaRequestIDValidator func(string) error
+	// VegaRunnerIDValidator is a validator for the "vega_runner_id" field. It is called by the builders before save.
+	VegaRunnerIDValidator func(string) error
 	// ModelMappingChainValidator is a validator for the "model_mapping_chain" field. It is called by the builders before save.
 	ModelMappingChainValidator func(string) error
 	// BillingTierValidator is a validator for the "billing_tier" field. It is called by the builders before save.
@@ -307,6 +327,26 @@ func ByRequestedModel(opts ...sql.OrderTermOption) OrderOption {
 // ByUpstreamModel orders the results by the upstream_model field.
 func ByUpstreamModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpstreamModel, opts...).ToFunc()
+}
+
+// ByVegaScanID orders the results by the vega_scan_id field.
+func ByVegaScanID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVegaScanID, opts...).ToFunc()
+}
+
+// ByVegaProjectID orders the results by the vega_project_id field.
+func ByVegaProjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVegaProjectID, opts...).ToFunc()
+}
+
+// ByVegaRequestID orders the results by the vega_request_id field.
+func ByVegaRequestID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVegaRequestID, opts...).ToFunc()
+}
+
+// ByVegaRunnerID orders the results by the vega_runner_id field.
+func ByVegaRunnerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVegaRunnerID, opts...).ToFunc()
 }
 
 // ByChannelID orders the results by the channel_id field.
