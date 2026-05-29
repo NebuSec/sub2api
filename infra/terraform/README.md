@@ -42,16 +42,25 @@ If prod resources already exist, move/import their state into this root before
 succeeds on a push to `main`. It can also be run manually with
 `workflow_dispatch`.
 
-Required GitHub environment/repository secret:
+By default, the workflow uses this dedicated Sub2API deployment role:
 
 ```text
-AWS_DEPLOY_ROLE_ARN
+arn:aws:iam::939169265111:role/vega-prod-sub2api-github-actions-deploy
 ```
 
-The role should trust GitHub Actions OIDC for this repository and have
-permission to push to the Sub2API ECR repository, read/write the Terraform S3
-state and lock table, read the shared Vega remote state, and manage the AWS
-resources declared in this Terraform root.
+You can override it with the GitHub repository variable used by the Vega backend
+prod deployment convention:
+
+```text
+AWS_PROD_DEPLOY_ROLE_ARN
+```
+
+Alternatively, set a repository/environment secret named `AWS_DEPLOY_ROLE_ARN`.
+
+The role should trust GitHub Actions OIDC for this repository's `prod`
+environment and have permission to push to the Sub2API ECR repository,
+read/write the Terraform S3 state and lock table, read the shared Vega remote
+state, and manage the AWS resources declared in this Terraform root.
 
 Optional GitHub repository variables:
 
