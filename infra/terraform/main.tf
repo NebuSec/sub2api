@@ -16,6 +16,8 @@ data "terraform_remote_state" "vega" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_secretsmanager_secret" "sub2api_db_credentials" {
   name = data.terraform_remote_state.vega.outputs.secret_names["sub2api_db_credentials"]
 }
@@ -56,6 +58,7 @@ locals {
   cloudwatch_log_groups    = data.terraform_remote_state.vega.outputs.cloudwatch_log_group_names
   ecr_repository_urls      = data.terraform_remote_state.vega.outputs.ecr_repository_urls
   ecs_cluster_name         = data.terraform_remote_state.vega.outputs.ecs_cluster_name
+  ecs_cluster_arn          = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${local.ecs_cluster_name}"
   public_subnet_ids        = data.terraform_remote_state.vega.outputs.public_subnet_ids
   private_subnet_ids       = data.terraform_remote_state.vega.outputs.private_subnet_id_list
   sub2api_service_name     = "vega-sub2api"
@@ -67,7 +70,7 @@ module "sub2api_service" {
 
   name_prefix      = local.name_prefix
   environment      = var.environment
-  cluster_id       = local.ecs_cluster_name
+  cluster_id       = local.ecs_cluster_arn
   cluster_name     = local.ecs_cluster_name
   vpc_id           = data.terraform_remote_state.vega.outputs.vpc_id
   subnet_ids       = local.private_subnet_ids
@@ -220,7 +223,7 @@ resource "aws_ecs_task_definition" "cloudflared_sub2api" {
 
 resource "aws_ecs_service" "cloudflared_sub2api" {
   name            = "${local.name_prefix}-cloudflared-sub2api"
-  cluster         = local.ecs_cluster_name
+  cluster         = local.ecs_cluster_arn
   task_definition = aws_ecs_task_definition.cloudflared_sub2api.arn
   desired_count   = var.cloudflared_desired_count
   launch_type     = "FARGATE"
