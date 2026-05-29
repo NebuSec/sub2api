@@ -19,7 +19,7 @@ variable "environment" {
 variable "owner" {
   description = "Owner tag value."
   type        = string
-  default     = "security"
+  default     = "engineering"
 }
 
 variable "cost_center" {
@@ -49,7 +49,7 @@ variable "vega_state_region" {
 variable "sub2api_image_tag" {
   description = "Immutable pinned Sub2API image tag mirrored into the shared ECR repository."
   type        = string
-  default     = "replace-with-sub2api-version-sha"
+  default     = "0.1.130"
 
   validation {
     condition     = var.sub2api_image_tag != "latest" && var.sub2api_image_tag != "dev-current" && var.sub2api_image_tag != "prod-current"
@@ -78,7 +78,7 @@ variable "sub2api_memory" {
 variable "sub2api_run_mode" {
   description = "Sub2API run mode for prod."
   type        = string
-  default     = "standard"
+  default     = "simple"
 
   validation {
     condition     = contains(["standard", "simple"], var.sub2api_run_mode)
