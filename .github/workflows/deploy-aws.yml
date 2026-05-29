@@ -33,7 +33,7 @@ jobs:
     environment: prod
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success') }}
     env:
-      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_PROD_DEPLOY_ROLE_ARN' }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_PROD_DEPLOY_ROLE_ARN }}
 
     steps:
       - name: Checkout
