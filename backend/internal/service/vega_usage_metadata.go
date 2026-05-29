@@ -70,7 +70,9 @@ func sanitizeVegaMetadataValue(value string) string {
 		if r > unicode.MaxASCII || unicode.IsControl(r) {
 			continue
 		}
-		out.WriteRune(r)
+		if _, err := out.WriteRune(r); err != nil {
+			break
+		}
 		if out.Len() >= maxVegaMetadataValueLen {
 			break
 		}
