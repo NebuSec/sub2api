@@ -78,7 +78,7 @@ variable "sub2api_memory" {
 variable "sub2api_run_mode" {
   description = "Sub2API run mode for prod."
   type        = string
-  default     = "simple"
+  default     = "standard"
 
   validation {
     condition     = contains(["standard", "simple"], var.sub2api_run_mode)
