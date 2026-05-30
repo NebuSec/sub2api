@@ -53,22 +53,6 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(100).
 			Optional().
 			Nillable(),
-		field.String("vega_scan_id").
-			MaxLen(128).
-			Optional().
-			Nillable(),
-		field.String("vega_project_id").
-			MaxLen(128).
-			Optional().
-			Nillable(),
-		field.String("vega_request_id").
-			MaxLen(128).
-			Optional().
-			Nillable(),
-		field.String("vega_runner_id").
-			MaxLen(128).
-			Optional().
-			Nillable(),
 		field.Int64("channel_id").Optional().Nillable().Comment("渠道 ID"),
 		field.String("model_mapping_chain").MaxLen(500).Optional().Nillable().Comment("模型映射链"),
 		field.String("billing_tier").MaxLen(50).Optional().Nillable().Comment("计费层级标签"),
@@ -218,13 +202,9 @@ func (UsageLog) Indexes() []ent.Index {
 		index.Fields("model"),
 		index.Fields("requested_model"),
 		index.Fields("request_id"),
-		index.Fields("vega_scan_id"),
-		index.Fields("vega_project_id"),
 		// 复合索引用于时间范围查询
 		index.Fields("user_id", "created_at"),
 		index.Fields("api_key_id", "created_at"),
-		index.Fields("vega_scan_id", "created_at"),
-		index.Fields("vega_project_id", "created_at"),
 		// 分组维度时间范围查询（线上由 SQL 迁移创建 group_id IS NOT NULL 的部分索引）
 		index.Fields("group_id", "created_at"),
 	}

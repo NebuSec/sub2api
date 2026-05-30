@@ -111,8 +111,6 @@ func (h *UsageHandler) List(c *gin.Context) {
 
 	model := c.Query("model")
 	billingMode := strings.TrimSpace(c.Query("billing_mode"))
-	vegaScanID := strings.TrimSpace(c.Query("vega_scan_id"))
-	vegaProjectID := strings.TrimSpace(c.Query("vega_project_id"))
 
 	var requestType *int16
 	var stream *bool
@@ -174,20 +172,18 @@ func (h *UsageHandler) List(c *gin.Context) {
 		SortOrder: c.DefaultQuery("sort_order", "desc"),
 	}
 	filters := usagestats.UsageLogFilters{
-		UserID:        userID,
-		APIKeyID:      apiKeyID,
-		AccountID:     accountID,
-		GroupID:       groupID,
-		Model:         model,
-		RequestType:   requestType,
-		Stream:        stream,
-		BillingType:   billingType,
-		BillingMode:   billingMode,
-		VegaScanID:    vegaScanID,
-		VegaProjectID: vegaProjectID,
-		StartTime:     startTime,
-		EndTime:       endTime,
-		ExactTotal:    exactTotal,
+		UserID:      userID,
+		APIKeyID:    apiKeyID,
+		AccountID:   accountID,
+		GroupID:     groupID,
+		Model:       model,
+		RequestType: requestType,
+		Stream:      stream,
+		BillingType: billingType,
+		BillingMode: billingMode,
+		StartTime:   startTime,
+		EndTime:     endTime,
+		ExactTotal:  exactTotal,
 	}
 
 	records, result, err := h.usageService.ListWithFilters(c.Request.Context(), params, filters)
@@ -246,8 +242,6 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 
 	model := c.Query("model")
 	billingMode := strings.TrimSpace(c.Query("billing_mode"))
-	vegaScanID := strings.TrimSpace(c.Query("vega_scan_id"))
-	vegaProjectID := strings.TrimSpace(c.Query("vega_project_id"))
 
 	var requestType *int16
 	var stream *bool
@@ -318,19 +312,17 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 
 	// Build filters and call GetStatsWithFilters
 	filters := usagestats.UsageLogFilters{
-		UserID:        userID,
-		APIKeyID:      apiKeyID,
-		AccountID:     accountID,
-		GroupID:       groupID,
-		Model:         model,
-		RequestType:   requestType,
-		Stream:        stream,
-		BillingType:   billingType,
-		BillingMode:   billingMode,
-		VegaScanID:    vegaScanID,
-		VegaProjectID: vegaProjectID,
-		StartTime:     &startTime,
-		EndTime:       &endTime,
+		UserID:      userID,
+		APIKeyID:    apiKeyID,
+		AccountID:   accountID,
+		GroupID:     groupID,
+		Model:       model,
+		RequestType: requestType,
+		Stream:      stream,
+		BillingType: billingType,
+		BillingMode: billingMode,
+		StartTime:   &startTime,
+		EndTime:     &endTime,
 	}
 
 	stats, err := h.usageService.GetStatsWithFilters(c.Request.Context(), filters)

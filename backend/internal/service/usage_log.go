@@ -122,11 +122,6 @@ type UsageLog struct {
 	InboundEndpoint *string
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
-	// Vega metadata links gateway usage back to a Vega scan without exposing provider keys.
-	VegaScanID    *string
-	VegaProjectID *string
-	VegaRequestID *string
-	VegaRunnerID  *string
 
 	GroupID        *int64
 	SubscriptionID *int64

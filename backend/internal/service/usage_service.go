@@ -36,10 +36,6 @@ type CreateUsageLogRequest struct {
 	TotalCost             float64 `json:"total_cost"`
 	ActualCost            float64 `json:"actual_cost"`
 	RateMultiplier        float64 `json:"rate_multiplier"`
-	VegaScanID            *string `json:"vega_scan_id,omitempty"`
-	VegaProjectID         *string `json:"vega_project_id,omitempty"`
-	VegaRequestID         *string `json:"vega_request_id,omitempty"`
-	VegaRunnerID          *string `json:"vega_runner_id,omitempty"`
 	Stream                bool    `json:"stream"`
 	DurationMs            *int    `json:"duration_ms"`
 }
@@ -114,10 +110,6 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		TotalCost:             req.TotalCost,
 		ActualCost:            req.ActualCost,
 		RateMultiplier:        req.RateMultiplier,
-		VegaScanID:            req.VegaScanID,
-		VegaProjectID:         req.VegaProjectID,
-		VegaRequestID:         req.VegaRequestID,
-		VegaRunnerID:          req.VegaRunnerID,
 		Stream:                req.Stream,
 		DurationMs:            req.DurationMs,
 	}

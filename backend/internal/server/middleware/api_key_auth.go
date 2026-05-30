@@ -119,7 +119,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
 		if cfg.RunMode == config.RunModeSimple {
-			attachVegaUsageMetadata(c)
 			c.Set(string(ContextKeyAPIKey), apiKey)
 			c.Set(string(ContextKeyUser), AuthSubject{
 				UserID:      apiKey.User.ID,
@@ -215,7 +214,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
 		}
-		attachVegaUsageMetadata(c)
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
@@ -227,17 +225,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		c.Next()
 	}
-}
-
-func attachVegaUsageMetadata(c *gin.Context) {
-	if c == nil || c.Request == nil {
-		return
-	}
-	metadata := service.VegaUsageMetadataFromHeader(c.GetHeader)
-	if metadata.Empty() {
-		return
-	}
-	c.Request = c.Request.WithContext(service.WithVegaUsageMetadata(c.Request.Context(), metadata))
 }
 
 // GetAPIKeyFromContext 从上下文中获取API key

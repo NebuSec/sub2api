@@ -37,14 +37,6 @@ type UsageLog struct {
 	RequestedModel *string `json:"requested_model,omitempty"`
 	// UpstreamModel holds the value of the "upstream_model" field.
 	UpstreamModel *string `json:"upstream_model,omitempty"`
-	// VegaScanID holds the value of the "vega_scan_id" field.
-	VegaScanID *string `json:"vega_scan_id,omitempty"`
-	// VegaProjectID holds the value of the "vega_project_id" field.
-	VegaProjectID *string `json:"vega_project_id,omitempty"`
-	// VegaRequestID holds the value of the "vega_request_id" field.
-	VegaRequestID *string `json:"vega_request_id,omitempty"`
-	// VegaRunnerID holds the value of the "vega_runner_id" field.
-	VegaRunnerID *string `json:"vega_runner_id,omitempty"`
 	// 渠道 ID
 	ChannelID *int64 `json:"channel_id,omitempty"`
 	// 模型映射链
@@ -204,7 +196,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldChannelID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount:
 			values[i] = new(sql.NullInt64)
-		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldVegaScanID, usagelog.FieldVegaProjectID, usagelog.FieldVegaRequestID, usagelog.FieldVegaRunnerID, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource:
+		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldModelMappingChain, usagelog.FieldBillingTier, usagelog.FieldBillingMode, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldImageInputSize, usagelog.FieldImageOutputSize, usagelog.FieldImageSizeSource:
 			values[i] = new(sql.NullString)
 		case usagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -272,34 +264,6 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UpstreamModel = new(string)
 				*_m.UpstreamModel = value.String
-			}
-		case usagelog.FieldVegaScanID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field vega_scan_id", values[i])
-			} else if value.Valid {
-				_m.VegaScanID = new(string)
-				*_m.VegaScanID = value.String
-			}
-		case usagelog.FieldVegaProjectID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field vega_project_id", values[i])
-			} else if value.Valid {
-				_m.VegaProjectID = new(string)
-				*_m.VegaProjectID = value.String
-			}
-		case usagelog.FieldVegaRequestID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field vega_request_id", values[i])
-			} else if value.Valid {
-				_m.VegaRequestID = new(string)
-				*_m.VegaRequestID = value.String
-			}
-		case usagelog.FieldVegaRunnerID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field vega_runner_id", values[i])
-			} else if value.Valid {
-				_m.VegaRunnerID = new(string)
-				*_m.VegaRunnerID = value.String
 			}
 		case usagelog.FieldChannelID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -605,26 +569,6 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	if v := _m.UpstreamModel; v != nil {
 		builder.WriteString("upstream_model=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.VegaScanID; v != nil {
-		builder.WriteString("vega_scan_id=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.VegaProjectID; v != nil {
-		builder.WriteString("vega_project_id=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.VegaRequestID; v != nil {
-		builder.WriteString("vega_request_id=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.VegaRunnerID; v != nil {
-		builder.WriteString("vega_runner_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

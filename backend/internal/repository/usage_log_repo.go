@@ -28,7 +28,7 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, vega_scan_id, vega_project_id, vega_request_id, vega_runner_id, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
 
 // usageLogInsertArgTypes must stay in the same order as:
 //  1. prepareUsageLogInsert().args
@@ -45,10 +45,6 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // model
 	"text",        // requested_model
 	"text",        // upstream_model
-	"text",        // vega_scan_id
-	"text",        // vega_project_id
-	"text",        // vega_request_id
-	"text",        // vega_runner_id
 	"bigint",      // group_id
 	"bigint",      // subscription_id
 	"integer",     // input_tokens
@@ -159,18 +155,6 @@ func appendUsageLogBillingModeWhereCondition(conditions []string, args []any, bi
 		conditions = append(conditions, fmt.Sprintf("billing_mode = %s", placeholder))
 	}
 	args = append(args, mode)
-	return conditions, args
-}
-
-func appendVegaUsageMetadataWhereConditions(conditions []string, args []any, scanID, projectID string) ([]string, []any) {
-	if v := strings.TrimSpace(scanID); v != "" {
-		conditions = append(conditions, fmt.Sprintf("vega_scan_id = $%d", len(args)+1))
-		args = append(args, v)
-	}
-	if v := strings.TrimSpace(projectID); v != "" {
-		conditions = append(conditions, fmt.Sprintf("vega_project_id = $%d", len(args)+1))
-		args = append(args, v)
-	}
 	return conditions, args
 }
 
@@ -378,10 +362,6 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -427,12 +407,11 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11,
-			$12, $13,
+			$8, $9,
+			$10, $11, $12, $13,
 			$14, $15, $16, $17,
-			$18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27,
-			$28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54
+			$18, $19, $20, $21, $22, $23,
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -825,10 +804,6 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -874,7 +849,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(keys)*54)
+	args := make([]any, 0, len(keys)*50)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -910,10 +885,6 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				model,
 				requested_model,
 				upstream_model,
-				vega_scan_id,
-				vega_project_id,
-				vega_request_id,
-				vega_runner_id,
 				group_id,
 				subscription_id,
 				input_tokens,
@@ -966,10 +937,6 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				model,
 				requested_model,
 				upstream_model,
-				vega_scan_id,
-				vega_project_id,
-				vega_request_id,
-				vega_runner_id,
 				group_id,
 				subscription_id,
 				input_tokens,
@@ -1062,10 +1029,6 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1144,10 +1107,6 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1200,10 +1159,6 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1264,10 +1219,6 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			model,
 			requested_model,
 			upstream_model,
-			vega_scan_id,
-			vega_project_id,
-			vega_request_id,
-			vega_runner_id,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1313,12 +1264,11 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11,
-			$12, $13,
+			$8, $9,
+			$10, $11, $12, $13,
 			$14, $15, $16, $17,
-			$18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27,
-			$28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54
+			$18, $19, $20, $21, $22, $23,
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1362,10 +1312,6 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 		requestedModel = strings.TrimSpace(log.Model)
 	}
 	upstreamModel := nullString(log.UpstreamModel)
-	vegaScanID := nullString(log.VegaScanID)
-	vegaProjectID := nullString(log.VegaProjectID)
-	vegaRequestID := nullString(log.VegaRequestID)
-	vegaRunnerID := nullString(log.VegaRunnerID)
 
 	var requestIDArg any
 	if requestID != "" {
@@ -1385,10 +1331,6 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.Model,
 			nullString(&requestedModel),
 			upstreamModel,
-			vegaScanID,
-			vegaProjectID,
-			vegaRequestID,
-			vegaRunnerID,
 			groupID,
 			subscriptionID,
 			log.InputTokens,
@@ -2853,7 +2795,6 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		args = append(args, int16(*filters.BillingType))
 	}
 	conditions, args = appendUsageLogBillingModeWhereCondition(conditions, args, filters.BillingMode)
-	conditions, args = appendVegaUsageMetadataWhereConditions(conditions, args, filters.VegaScanID, filters.VegaProjectID)
 	if filters.StartTime != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
 		args = append(args, *filters.StartTime)
@@ -2889,7 +2830,7 @@ func shouldUseFastUsageLogTotal(filters UsageLogFilters) bool {
 		return false
 	}
 	// 强选择过滤下记录集通常较小，保留精确总数。
-	return filters.UserID == 0 && filters.APIKeyID == 0 && filters.AccountID == 0 && strings.TrimSpace(filters.VegaScanID) == "" && strings.TrimSpace(filters.VegaProjectID) == ""
+	return filters.UserID == 0 && filters.APIKeyID == 0 && filters.AccountID == 0
 }
 
 // UsageStats represents usage statistics
@@ -3571,7 +3512,6 @@ func (r *usageLogRepository) GetStatsWithFilters(ctx context.Context, filters Us
 		args = append(args, int16(*filters.BillingType))
 	}
 	conditions, args = appendUsageLogBillingModeWhereCondition(conditions, args, filters.BillingMode)
-	conditions, args = appendVegaUsageMetadataWhereConditions(conditions, args, filters.VegaScanID, filters.VegaProjectID)
 	if filters.StartTime != nil {
 		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", len(args)+1))
 		args = append(args, *filters.StartTime)
@@ -4261,10 +4201,6 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		model                 string
 		requestedModel        sql.NullString
 		upstreamModel         sql.NullString
-		vegaScanID            sql.NullString
-		vegaProjectID         sql.NullString
-		vegaRequestID         sql.NullString
-		vegaRunnerID          sql.NullString
 		groupID               sql.NullInt64
 		subscriptionID        sql.NullInt64
 		inputTokens           int
@@ -4319,10 +4255,6 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&model,
 		&requestedModel,
 		&upstreamModel,
-		&vegaScanID,
-		&vegaProjectID,
-		&vegaRequestID,
-		&vegaRunnerID,
 		&groupID,
 		&subscriptionID,
 		&inputTokens,
@@ -4457,18 +4389,6 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	}
 	if upstreamModel.Valid {
 		log.UpstreamModel = &upstreamModel.String
-	}
-	if vegaScanID.Valid {
-		log.VegaScanID = &vegaScanID.String
-	}
-	if vegaProjectID.Valid {
-		log.VegaProjectID = &vegaProjectID.String
-	}
-	if vegaRequestID.Valid {
-		log.VegaRequestID = &vegaRequestID.String
-	}
-	if vegaRunnerID.Valid {
-		log.VegaRunnerID = &vegaRunnerID.String
 	}
 	if channelID.Valid {
 		value := channelID.Int64

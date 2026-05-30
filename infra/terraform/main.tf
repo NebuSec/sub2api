@@ -87,6 +87,7 @@ module "sub2api_service" {
     cloudflared = aws_security_group.cloudflared.id
     api         = local.security_group_ids.api
     llm_proxy   = local.security_group_ids.llm_proxy
+    worker      = local.security_group_ids.worker
   }
 
   task_execution_role_arn         = data.terraform_remote_state.vega.outputs.task_execution_role_arn

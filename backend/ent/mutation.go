@@ -34452,10 +34452,6 @@ type UsageLogMutation struct {
 	model                       *string
 	requested_model             *string
 	upstream_model              *string
-	vega_scan_id                *string
-	vega_project_id             *string
-	vega_request_id             *string
-	vega_runner_id              *string
 	channel_id                  *int64
 	addchannel_id               *int64
 	model_mapping_chain         *string
@@ -34897,202 +34893,6 @@ func (m *UsageLogMutation) UpstreamModelCleared() bool {
 func (m *UsageLogMutation) ResetUpstreamModel() {
 	m.upstream_model = nil
 	delete(m.clearedFields, usagelog.FieldUpstreamModel)
-}
-
-// SetVegaScanID sets the "vega_scan_id" field.
-func (m *UsageLogMutation) SetVegaScanID(s string) {
-	m.vega_scan_id = &s
-}
-
-// VegaScanID returns the value of the "vega_scan_id" field in the mutation.
-func (m *UsageLogMutation) VegaScanID() (r string, exists bool) {
-	v := m.vega_scan_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldVegaScanID returns the old "vega_scan_id" field's value of the UsageLog entity.
-// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageLogMutation) OldVegaScanID(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVegaScanID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVegaScanID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVegaScanID: %w", err)
-	}
-	return oldValue.VegaScanID, nil
-}
-
-// ClearVegaScanID clears the value of the "vega_scan_id" field.
-func (m *UsageLogMutation) ClearVegaScanID() {
-	m.vega_scan_id = nil
-	m.clearedFields[usagelog.FieldVegaScanID] = struct{}{}
-}
-
-// VegaScanIDCleared returns if the "vega_scan_id" field was cleared in this mutation.
-func (m *UsageLogMutation) VegaScanIDCleared() bool {
-	_, ok := m.clearedFields[usagelog.FieldVegaScanID]
-	return ok
-}
-
-// ResetVegaScanID resets all changes to the "vega_scan_id" field.
-func (m *UsageLogMutation) ResetVegaScanID() {
-	m.vega_scan_id = nil
-	delete(m.clearedFields, usagelog.FieldVegaScanID)
-}
-
-// SetVegaProjectID sets the "vega_project_id" field.
-func (m *UsageLogMutation) SetVegaProjectID(s string) {
-	m.vega_project_id = &s
-}
-
-// VegaProjectID returns the value of the "vega_project_id" field in the mutation.
-func (m *UsageLogMutation) VegaProjectID() (r string, exists bool) {
-	v := m.vega_project_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldVegaProjectID returns the old "vega_project_id" field's value of the UsageLog entity.
-// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageLogMutation) OldVegaProjectID(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVegaProjectID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVegaProjectID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVegaProjectID: %w", err)
-	}
-	return oldValue.VegaProjectID, nil
-}
-
-// ClearVegaProjectID clears the value of the "vega_project_id" field.
-func (m *UsageLogMutation) ClearVegaProjectID() {
-	m.vega_project_id = nil
-	m.clearedFields[usagelog.FieldVegaProjectID] = struct{}{}
-}
-
-// VegaProjectIDCleared returns if the "vega_project_id" field was cleared in this mutation.
-func (m *UsageLogMutation) VegaProjectIDCleared() bool {
-	_, ok := m.clearedFields[usagelog.FieldVegaProjectID]
-	return ok
-}
-
-// ResetVegaProjectID resets all changes to the "vega_project_id" field.
-func (m *UsageLogMutation) ResetVegaProjectID() {
-	m.vega_project_id = nil
-	delete(m.clearedFields, usagelog.FieldVegaProjectID)
-}
-
-// SetVegaRequestID sets the "vega_request_id" field.
-func (m *UsageLogMutation) SetVegaRequestID(s string) {
-	m.vega_request_id = &s
-}
-
-// VegaRequestID returns the value of the "vega_request_id" field in the mutation.
-func (m *UsageLogMutation) VegaRequestID() (r string, exists bool) {
-	v := m.vega_request_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldVegaRequestID returns the old "vega_request_id" field's value of the UsageLog entity.
-// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageLogMutation) OldVegaRequestID(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVegaRequestID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVegaRequestID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVegaRequestID: %w", err)
-	}
-	return oldValue.VegaRequestID, nil
-}
-
-// ClearVegaRequestID clears the value of the "vega_request_id" field.
-func (m *UsageLogMutation) ClearVegaRequestID() {
-	m.vega_request_id = nil
-	m.clearedFields[usagelog.FieldVegaRequestID] = struct{}{}
-}
-
-// VegaRequestIDCleared returns if the "vega_request_id" field was cleared in this mutation.
-func (m *UsageLogMutation) VegaRequestIDCleared() bool {
-	_, ok := m.clearedFields[usagelog.FieldVegaRequestID]
-	return ok
-}
-
-// ResetVegaRequestID resets all changes to the "vega_request_id" field.
-func (m *UsageLogMutation) ResetVegaRequestID() {
-	m.vega_request_id = nil
-	delete(m.clearedFields, usagelog.FieldVegaRequestID)
-}
-
-// SetVegaRunnerID sets the "vega_runner_id" field.
-func (m *UsageLogMutation) SetVegaRunnerID(s string) {
-	m.vega_runner_id = &s
-}
-
-// VegaRunnerID returns the value of the "vega_runner_id" field in the mutation.
-func (m *UsageLogMutation) VegaRunnerID() (r string, exists bool) {
-	v := m.vega_runner_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldVegaRunnerID returns the old "vega_runner_id" field's value of the UsageLog entity.
-// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UsageLogMutation) OldVegaRunnerID(ctx context.Context) (v *string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVegaRunnerID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVegaRunnerID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVegaRunnerID: %w", err)
-	}
-	return oldValue.VegaRunnerID, nil
-}
-
-// ClearVegaRunnerID clears the value of the "vega_runner_id" field.
-func (m *UsageLogMutation) ClearVegaRunnerID() {
-	m.vega_runner_id = nil
-	m.clearedFields[usagelog.FieldVegaRunnerID] = struct{}{}
-}
-
-// VegaRunnerIDCleared returns if the "vega_runner_id" field was cleared in this mutation.
-func (m *UsageLogMutation) VegaRunnerIDCleared() bool {
-	_, ok := m.clearedFields[usagelog.FieldVegaRunnerID]
-	return ok
-}
-
-// ResetVegaRunnerID resets all changes to the "vega_runner_id" field.
-func (m *UsageLogMutation) ResetVegaRunnerID() {
-	m.vega_runner_id = nil
-	delete(m.clearedFields, usagelog.FieldVegaRunnerID)
 }
 
 // SetChannelID sets the "channel_id" field.
@@ -37080,7 +36880,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 45)
+	fields := make([]string, 0, 41)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -37101,18 +36901,6 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.upstream_model != nil {
 		fields = append(fields, usagelog.FieldUpstreamModel)
-	}
-	if m.vega_scan_id != nil {
-		fields = append(fields, usagelog.FieldVegaScanID)
-	}
-	if m.vega_project_id != nil {
-		fields = append(fields, usagelog.FieldVegaProjectID)
-	}
-	if m.vega_request_id != nil {
-		fields = append(fields, usagelog.FieldVegaRequestID)
-	}
-	if m.vega_runner_id != nil {
-		fields = append(fields, usagelog.FieldVegaRunnerID)
 	}
 	if m.channel_id != nil {
 		fields = append(fields, usagelog.FieldChannelID)
@@ -37238,14 +37026,6 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.RequestedModel()
 	case usagelog.FieldUpstreamModel:
 		return m.UpstreamModel()
-	case usagelog.FieldVegaScanID:
-		return m.VegaScanID()
-	case usagelog.FieldVegaProjectID:
-		return m.VegaProjectID()
-	case usagelog.FieldVegaRequestID:
-		return m.VegaRequestID()
-	case usagelog.FieldVegaRunnerID:
-		return m.VegaRunnerID()
 	case usagelog.FieldChannelID:
 		return m.ChannelID()
 	case usagelog.FieldModelMappingChain:
@@ -37337,14 +37117,6 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldRequestedModel(ctx)
 	case usagelog.FieldUpstreamModel:
 		return m.OldUpstreamModel(ctx)
-	case usagelog.FieldVegaScanID:
-		return m.OldVegaScanID(ctx)
-	case usagelog.FieldVegaProjectID:
-		return m.OldVegaProjectID(ctx)
-	case usagelog.FieldVegaRequestID:
-		return m.OldVegaRequestID(ctx)
-	case usagelog.FieldVegaRunnerID:
-		return m.OldVegaRunnerID(ctx)
 	case usagelog.FieldChannelID:
 		return m.OldChannelID(ctx)
 	case usagelog.FieldModelMappingChain:
@@ -37470,34 +37242,6 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpstreamModel(v)
-		return nil
-	case usagelog.FieldVegaScanID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVegaScanID(v)
-		return nil
-	case usagelog.FieldVegaProjectID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVegaProjectID(v)
-		return nil
-	case usagelog.FieldVegaRequestID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVegaRequestID(v)
-		return nil
-	case usagelog.FieldVegaRunnerID:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVegaRunnerID(v)
 		return nil
 	case usagelog.FieldChannelID:
 		v, ok := value.(int64)
@@ -38004,18 +37748,6 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldUpstreamModel) {
 		fields = append(fields, usagelog.FieldUpstreamModel)
 	}
-	if m.FieldCleared(usagelog.FieldVegaScanID) {
-		fields = append(fields, usagelog.FieldVegaScanID)
-	}
-	if m.FieldCleared(usagelog.FieldVegaProjectID) {
-		fields = append(fields, usagelog.FieldVegaProjectID)
-	}
-	if m.FieldCleared(usagelog.FieldVegaRequestID) {
-		fields = append(fields, usagelog.FieldVegaRequestID)
-	}
-	if m.FieldCleared(usagelog.FieldVegaRunnerID) {
-		fields = append(fields, usagelog.FieldVegaRunnerID)
-	}
 	if m.FieldCleared(usagelog.FieldChannelID) {
 		fields = append(fields, usagelog.FieldChannelID)
 	}
@@ -38083,18 +37815,6 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldUpstreamModel:
 		m.ClearUpstreamModel()
-		return nil
-	case usagelog.FieldVegaScanID:
-		m.ClearVegaScanID()
-		return nil
-	case usagelog.FieldVegaProjectID:
-		m.ClearVegaProjectID()
-		return nil
-	case usagelog.FieldVegaRequestID:
-		m.ClearVegaRequestID()
-		return nil
-	case usagelog.FieldVegaRunnerID:
-		m.ClearVegaRunnerID()
 		return nil
 	case usagelog.FieldChannelID:
 		m.ClearChannelID()
@@ -38172,18 +37892,6 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldUpstreamModel:
 		m.ResetUpstreamModel()
-		return nil
-	case usagelog.FieldVegaScanID:
-		m.ResetVegaScanID()
-		return nil
-	case usagelog.FieldVegaProjectID:
-		m.ResetVegaProjectID()
-		return nil
-	case usagelog.FieldVegaRequestID:
-		m.ResetVegaRequestID()
-		return nil
-	case usagelog.FieldVegaRunnerID:
-		m.ResetVegaRunnerID()
 		return nil
 	case usagelog.FieldChannelID:
 		m.ResetChannelID()
