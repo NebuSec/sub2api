@@ -568,6 +568,12 @@ resource "aws_ecs_service" "sub2api" {
         dns_name = "sub2api"
         port     = var.container_port
       }
+
+      # Streaming LLM responses can run well past Envoy's default 15s
+      # per-request timeout, which severed scan streams mid-response.
+      timeout {
+        per_request_timeout_seconds = 300
+      }
     }
   }
 
