@@ -749,6 +749,45 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	return nil
 }
 
+// CheckBillingEligibilitySnapshot performs the same balance/subscription/quota checks as the
+// gateway preflight path but intentionally does not increment RPM counters.
+func (s *BillingCacheService) CheckBillingEligibilitySnapshot(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string) error {
+	if s == nil {
+		return ErrBillingServiceUnavailable
+	}
+	if s.cfg.RunMode == config.RunModeSimple {
+		return nil
+	}
+	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
+		return ErrBillingServiceUnavailable
+	}
+
+	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	if isSubscriptionMode {
+		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
+			return err
+		}
+	} else {
+		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
+			return err
+		}
+	}
+
+	if !isSubscriptionMode {
+		if err := s.checkUserPlatformQuotaEligibility(ctx, user.ID, platform); err != nil {
+			return err
+		}
+	}
+
+	if apiKey != nil && apiKey.HasRateLimits() {
+		if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // checkRPM 执行并行 RPM 限流，所有适用的限制同时生效，任一超限即拒绝：
 //
 //  1. (用户, 分组) rpm_override       — 最细粒度：管理员为特定用户在特定分组设定的专属限额。
