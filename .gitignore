@@ -138,3 +138,6 @@ docs/*
 frontend/coverage/
 aicodex
 output/
+
+# Terraform local working directories
+**/.terraform/
