@@ -144,7 +144,7 @@ func (h *UsageHandler) List(c *gin.Context) {
 
 	// Parse date range
 	var startTime, endTime *time.Time
-	userTZ := c.Query("timezone") // Get user's timezone from request
+	userTZ := adminUsageTimezone(c) // Default machine-to-machine usage queries to UTC.
 	if startDateStr := c.Query("start_date"); startDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
@@ -274,7 +274,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	}
 
 	// Parse date range
-	userTZ := c.Query("timezone")
+	userTZ := adminUsageTimezone(c)
 	now := timezone.NowInUserLocation(userTZ)
 	var startTime, endTime time.Time
 
@@ -332,6 +332,14 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	}
 
 	response.Success(c, stats)
+}
+
+func adminUsageTimezone(c *gin.Context) string {
+	userTZ := strings.TrimSpace(c.Query("timezone"))
+	if userTZ == "" {
+		return "UTC"
+	}
+	return userTZ
 }
 
 // SearchUsers handles searching users by email keyword

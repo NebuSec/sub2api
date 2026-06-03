@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
@@ -117,6 +118,49 @@ func TestAdminUsageStatsRequestTypePriority(t *testing.T) {
 	require.NotNil(t, repo.statsFilters.RequestType)
 	require.Equal(t, int16(service.RequestTypeStream), *repo.statsFilters.RequestType)
 	require.Nil(t, repo.statsFilters.Stream)
+}
+
+func TestAdminUsageStatsDateRangeDefaultsToUTC(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage/stats?start_date=2026-06-01&end_date=2026-06-02", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, repo.statsFilters.StartTime)
+	require.NotNil(t, repo.statsFilters.EndTime)
+	require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), *repo.statsFilters.StartTime)
+	require.Equal(t, time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), *repo.statsFilters.EndTime)
+}
+
+func TestAdminUsageStatsDateRangeHonorsExplicitTimezone(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+	shanghai, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage/stats?start_date=2026-06-01&end_date=2026-06-02&timezone=Asia/Shanghai", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, repo.statsFilters.StartTime)
+	require.NotNil(t, repo.statsFilters.EndTime)
+	require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, shanghai), *repo.statsFilters.StartTime)
+	require.Equal(t, time.Date(2026, 6, 3, 0, 0, 0, 0, shanghai), *repo.statsFilters.EndTime)
+}
+
+func TestBillingSummaryDateRangeDefaultsToUTC(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/admin/users/1/billing-summary?start_date=2026-06-01&end_date=2026-06-02", nil)
+
+	startTime, endTime := parseBillingSummaryTimeRange(c)
+
+	require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), startTime)
+	require.Equal(t, time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), endTime)
 }
 
 func TestAdminUsageStatsInvalidRequestType(t *testing.T) {
