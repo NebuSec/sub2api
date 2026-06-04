@@ -541,12 +541,12 @@ func (h *UserHandler) writeBillingEligibility(c *gin.Context, allowed bool, apiK
 }
 
 func timezoneStartOfToday(c *gin.Context) time.Time {
-	userTZ := adminUserUsageTimezone(c)
+	userTZ := c.Query("timezone")
 	return timezone.StartOfDayInUserLocation(timezone.NowInUserLocation(userTZ), userTZ)
 }
 
 func parseBillingSummaryTimeRange(c *gin.Context) (time.Time, time.Time) {
-	userTZ := adminUserUsageTimezone(c)
+	userTZ := c.Query("timezone")
 	now := timezone.NowInUserLocation(userTZ)
 	startDate := strings.TrimSpace(c.Query("start_date"))
 	endDate := strings.TrimSpace(c.Query("end_date"))
@@ -565,14 +565,6 @@ func parseBillingSummaryTimeRange(c *gin.Context) (time.Time, time.Time) {
 		}
 	}
 	return startTime, endTime
-}
-
-func adminUserUsageTimezone(c *gin.Context) string {
-	userTZ := strings.TrimSpace(c.Query("timezone"))
-	if userTZ == "" {
-		return "UTC"
-	}
-	return userTZ
 }
 
 // Update handles updating a user
