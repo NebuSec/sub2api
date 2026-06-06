@@ -153,9 +153,9 @@ func (s *apiKeyRepoStubForGroupUpdate) GetByKey(context.Context, string) (*APIKe
 func (s *apiKeyRepoStubForGroupUpdate) GetByKeyForAuth(context.Context, string) (*APIKey, error) {
 	panic("unexpected")
 }
-func (s *apiKeyRepoStubForGroupUpdate) Delete(_ context.Context, id int64) error {
-	s.deletedID = id
-	return s.deleteErr
+func (s *apiKeyRepoStubForGroupUpdate) Delete(context.Context, int64) error { panic("unexpected") }
+func (s *apiKeyRepoStubForGroupUpdate) DeleteWithAudit(context.Context, int64) error {
+	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) ListByUserID(context.Context, int64, pagination.PaginationParams, APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected")
