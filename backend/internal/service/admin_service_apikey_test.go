@@ -112,12 +112,13 @@ func (s *userRepoStubForGroupUpdate) RemoveGroupFromUserAllowedGroups(context.Co
 
 // apiKeyRepoStubForGroupUpdate implements APIKeyRepository for AdminUpdateAPIKeyGroupID tests.
 type apiKeyRepoStubForGroupUpdate struct {
-	key       *APIKey
-	getErr    error
-	updateErr error
-	deleteErr error
-	updated   *APIKey // captures what was passed to Update
-	deletedID int64
+	key         *APIKey
+	getErr      error
+	updateErr   error
+	deleteErr   error
+	updated     *APIKey // captures what was passed to Update
+	deletedID   int64
+	allowDelete bool
 }
 
 func (s *apiKeyRepoStubForGroupUpdate) GetByID(_ context.Context, _ int64) (*APIKey, error) {
@@ -154,8 +155,14 @@ func (s *apiKeyRepoStubForGroupUpdate) GetByKeyForAuth(context.Context, string) 
 	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) Delete(_ context.Context, id int64) error {
+	if !s.allowDelete {
+		panic("unexpected")
+	}
 	s.deletedID = id
 	return s.deleteErr
+}
+func (s *apiKeyRepoStubForGroupUpdate) DeleteWithAudit(context.Context, int64) error {
+	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) ListByUserID(context.Context, int64, pagination.PaginationParams, APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected")
@@ -443,7 +450,7 @@ func TestAdminService_AdminDeleteAPIKey_KeyNotFound(t *testing.T) {
 
 func TestAdminService_AdminDeleteAPIKey_DeletesAndInvalidatesCache(t *testing.T) {
 	existing := &APIKey{ID: 7, UserID: 42, Key: "sk-test"}
-	repo := &apiKeyRepoStubForGroupUpdate{key: existing}
+	repo := &apiKeyRepoStubForGroupUpdate{key: existing, allowDelete: true}
 	cache := &authCacheInvalidatorStub{}
 	svc := &adminServiceImpl{apiKeyRepo: repo, authCacheInvalidator: cache}
 
@@ -455,7 +462,7 @@ func TestAdminService_AdminDeleteAPIKey_DeletesAndInvalidatesCache(t *testing.T)
 
 func TestAdminService_AdminDeleteAPIKey_DeleteFails(t *testing.T) {
 	existing := &APIKey{ID: 7, UserID: 42, Key: "sk-test"}
-	repo := &apiKeyRepoStubForGroupUpdate{key: existing, deleteErr: errors.New("db delete error")}
+	repo := &apiKeyRepoStubForGroupUpdate{key: existing, deleteErr: errors.New("db delete error"), allowDelete: true}
 	cache := &authCacheInvalidatorStub{}
 	svc := &adminServiceImpl{apiKeyRepo: repo, authCacheInvalidator: cache}
 
