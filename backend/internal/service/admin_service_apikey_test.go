@@ -115,7 +115,9 @@ type apiKeyRepoStubForGroupUpdate struct {
 	key       *APIKey
 	getErr    error
 	updateErr error
+	deleteErr error
 	updated   *APIKey // captures what was passed to Update
+	deletedID int64
 }
 
 func (s *apiKeyRepoStubForGroupUpdate) GetByID(_ context.Context, _ int64) (*APIKey, error) {
@@ -137,7 +139,13 @@ func (s *apiKeyRepoStubForGroupUpdate) Update(_ context.Context, key *APIKey) er
 // Unused methods – panic on unexpected call.
 func (s *apiKeyRepoStubForGroupUpdate) Create(context.Context, *APIKey) error { panic("unexpected") }
 func (s *apiKeyRepoStubForGroupUpdate) GetKeyAndOwnerID(context.Context, int64) (string, int64, error) {
-	panic("unexpected")
+	if s.getErr != nil {
+		return "", 0, s.getErr
+	}
+	if s.key == nil {
+		return "", 0, ErrAPIKeyNotFound
+	}
+	return s.key.Key, s.key.UserID, nil
 }
 func (s *apiKeyRepoStubForGroupUpdate) GetByKey(context.Context, string) (*APIKey, error) {
 	panic("unexpected")
@@ -146,8 +154,9 @@ func (s *apiKeyRepoStubForGroupUpdate) GetByKeyForAuth(context.Context, string) 
 	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) Delete(context.Context, int64) error { panic("unexpected") }
-func (s *apiKeyRepoStubForGroupUpdate) DeleteWithAudit(context.Context, int64) error {
-	panic("unexpected")
+func (s *apiKeyRepoStubForGroupUpdate) DeleteWithAudit(_ context.Context, id int64) error {
+	s.deletedID = id
+	return s.deleteErr
 }
 func (s *apiKeyRepoStubForGroupUpdate) ListByUserID(context.Context, int64, pagination.PaginationParams, APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected")
@@ -422,6 +431,39 @@ func TestAdminService_AdminUpdateAPIKeyGroupID_NilCacheInvalidator(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, got.APIKey.GroupID)
 	require.Equal(t, int64(7), *got.APIKey.GroupID)
+}
+
+func TestAdminService_AdminDeleteAPIKey_KeyNotFound(t *testing.T) {
+	repo := &apiKeyRepoStubForGroupUpdate{getErr: ErrAPIKeyNotFound}
+	svc := &adminServiceImpl{apiKeyRepo: repo}
+
+	err := svc.AdminDeleteAPIKey(context.Background(), 999)
+	require.ErrorIs(t, err, ErrAPIKeyNotFound)
+	require.Zero(t, repo.deletedID)
+}
+
+func TestAdminService_AdminDeleteAPIKey_DeletesAndInvalidatesCache(t *testing.T) {
+	existing := &APIKey{ID: 7, UserID: 42, Key: "sk-test"}
+	repo := &apiKeyRepoStubForGroupUpdate{key: existing}
+	cache := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{apiKeyRepo: repo, authCacheInvalidator: cache}
+
+	err := svc.AdminDeleteAPIKey(context.Background(), 7)
+	require.NoError(t, err)
+	require.Equal(t, int64(7), repo.deletedID)
+	require.Equal(t, []string{"sk-test"}, cache.keys)
+}
+
+func TestAdminService_AdminDeleteAPIKey_DeleteFails(t *testing.T) {
+	existing := &APIKey{ID: 7, UserID: 42, Key: "sk-test"}
+	repo := &apiKeyRepoStubForGroupUpdate{key: existing, deleteErr: errors.New("db delete error")}
+	cache := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{apiKeyRepo: repo, authCacheInvalidator: cache}
+
+	err := svc.AdminDeleteAPIKey(context.Background(), 7)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "delete api key")
+	require.Empty(t, cache.keys)
 }
 
 // ---------------------------------------------------------------------------
