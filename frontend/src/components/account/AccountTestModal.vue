@@ -1,23 +1,28 @@
 <template>
-  <Modal
+  <BaseDialog
     :show="show"
     :title="t('admin.accounts.testAccountConnection')"
-    size="md"
+    width="normal"
     @close="handleClose"
   >
     <div class="space-y-4">
       <!-- Account Info Card -->
-      <div v-if="account" class="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-dark-700 dark:to-dark-600 rounded-xl border border-gray-200 dark:border-dark-500">
+      <div
+        v-if="account"
+        class="flex items-center justify-between rounded-xl border border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 p-3 dark:border-dark-500 dark:from-dark-700 dark:to-dark-600"
+      >
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center">
-            <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-600"
+          >
+            <Icon name="play" size="md" class="text-white" :stroke-width="2" />
           </div>
           <div>
             <div class="font-semibold text-gray-900 dark:text-gray-100">{{ account.name }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              <span class="px-1.5 py-0.5 bg-gray-200 dark:bg-dark-500 rounded text-[10px] font-medium uppercase">
+            <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span
+                class="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium uppercase dark:bg-dark-500"
+              >
                 {{ account.type }}
               </span>
               <span>{{ t('admin.accounts.account') }}</span>
@@ -26,7 +31,7 @@
         </div>
         <span
           :class="[
-            'px-2.5 py-1 text-xs font-semibold rounded-full',
+            'rounded-full px-2.5 py-1 text-xs font-semibold',
             account.status === 'active'
               ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
               : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
@@ -36,41 +41,55 @@
         </span>
       </div>
 
-      <!-- Model Selection -->
       <div class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.selectTestModel') }}
         </label>
-        <select
+        <Select
           v-model="selectedModelId"
+          :options="availableModels"
           :disabled="loadingModels || status === 'connecting'"
-          class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-dark-500 bg-white dark:bg-dark-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <option v-if="loadingModels" value="">{{ t('common.loading') }}...</option>
-          <option v-for="model in availableModels" :key="model.id" :value="model.id">
-            {{ model.display_name }} ({{ model.id }})
-          </option>
-        </select>
+          value-key="id"
+          label-key="display_name"
+          :placeholder="loadingModels ? t('common.loading') + '...' : t('admin.accounts.selectTestModel')"
+        />
+      </div>
+
+      <div v-if="isOpenAIAccount" class="space-y-1.5">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.accounts.openai.testMode') }}
+        </label>
+        <Select
+          v-model="testMode"
+          :options="openAITestModeOptions"
+          :disabled="status === 'connecting'"
+        />
+      </div>
+
+      <div v-if="supportsImageTest" class="space-y-1.5">
+        <TextArea
+          v-model="testPrompt"
+          :label="t('admin.accounts.imagePromptLabel')"
+          :placeholder="t('admin.accounts.imagePromptPlaceholder')"
+          :hint="t('admin.accounts.imageTestHint')"
+          :disabled="status === 'connecting'"
+          rows="3"
+        />
       </div>
 
       <!-- Terminal Output -->
-      <div class="relative group">
+      <div class="group relative">
         <div
           ref="terminalRef"
-          class="bg-gray-900 dark:bg-black rounded-xl p-4 min-h-[120px] max-h-[240px] overflow-y-auto font-mono text-sm border border-gray-700 dark:border-gray-800"
+          class="max-h-[240px] min-h-[120px] overflow-y-auto rounded-xl border border-gray-700 bg-gray-900 p-4 font-mono text-sm dark:border-gray-800 dark:bg-black"
         >
           <!-- Status Line -->
-          <div v-if="status === 'idle'" class="text-gray-500 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+          <div v-if="status === 'idle'" class="flex items-center gap-2 text-gray-500">
+            <Icon name="play" size="sm" :stroke-width="2" />
             <span>{{ t('admin.accounts.readyToTest') }}</span>
           </div>
-          <div v-else-if="status === 'connecting'" class="text-yellow-400 flex items-center gap-2">
-            <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+          <div v-else-if="status === 'connecting'" class="flex items-center gap-2 text-yellow-400">
+            <Icon name="refresh" size="sm" class="animate-spin" :stroke-width="2" />
             <span>{{ t('admin.accounts.connectingToApi') }}</span>
           </div>
 
@@ -85,16 +104,18 @@
           </div>
 
           <!-- Result Status -->
-          <div v-if="status === 'success'" class="text-green-400 mt-3 pt-3 border-t border-gray-700 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div
+            v-if="status === 'success'"
+            class="mt-3 flex items-center gap-2 border-t border-gray-700 pt-3 text-green-400"
+          >
+            <Icon name="check" size="sm" :stroke-width="2" />
             <span>{{ t('admin.accounts.testCompleted') }}</span>
           </div>
-          <div v-else-if="status === 'error'" class="text-red-400 mt-3 pt-3 border-t border-gray-700 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div
+            v-else-if="status === 'error'"
+            class="mt-3 flex items-center gap-2 border-t border-gray-700 pt-3 text-red-400"
+          >
+            <Icon name="x" size="sm" :stroke-width="2" />
             <span>{{ errorMessage }}</span>
           </div>
         </div>
@@ -103,30 +124,73 @@
         <button
           v-if="outputLines.length > 0"
           @click="copyOutput"
-          class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white bg-gray-800/80 hover:bg-gray-700 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+          class="absolute right-2 top-2 rounded-lg bg-gray-800/80 p-1.5 text-gray-400 opacity-0 transition-all hover:bg-gray-700 hover:text-white group-hover:opacity-100"
           :title="t('admin.accounts.copyOutput')"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <Icon name="link" size="sm" :stroke-width="2" />
         </button>
       </div>
 
+      <div v-if="generatedImages.length > 0" class="space-y-2">
+        <div class="text-xs font-medium text-gray-600 dark:text-gray-300">
+          {{ t('admin.accounts.imagePreview') }}
+        </div>
+        <div class="flex flex-wrap justify-center gap-3">
+          <div
+            v-for="(image, index) in generatedImages"
+            :key="`${image.url}-${index}`"
+            class="group/img relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition hover:border-primary-300 hover:shadow-md dark:border-dark-500 dark:bg-dark-700"
+            @click="previewImageUrl = image.url"
+          >
+            <img :src="image.url" :alt="`test-image-${index + 1}`" class="max-h-[360px] w-full object-contain" />
+            <div class="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover/img:bg-black/20">
+              <Icon name="eye" size="lg" class="text-white opacity-0 drop-shadow-lg transition-opacity group-hover/img:opacity-100" :stroke-width="2" />
+            </div>
+            <div class="border-t border-gray-100 px-3 py-1.5 text-xs text-gray-500 dark:border-dark-500 dark:text-gray-300">
+              {{ image.mimeType || 'image/*' }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Image Lightbox -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="previewImageUrl"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            @click.self="previewImageUrl = ''"
+          >
+            <button
+              class="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
+              @click="previewImageUrl = ''"
+            >
+              <Icon name="x" size="lg" :stroke-width="2" />
+            </button>
+            <img
+              :src="previewImageUrl"
+              alt="preview"
+              class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+            />
+          </div>
+        </Transition>
+      </Teleport>
+
       <!-- Test Info -->
-      <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 px-1">
+      <div class="flex items-center justify-between px-1 text-xs text-gray-500 dark:text-gray-400">
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-            </svg>
+            <Icon name="grid" size="sm" :stroke-width="2" />
             {{ t('admin.accounts.testModel') }}
           </span>
         </div>
         <span class="flex items-center gap-1">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-          {{ t('admin.accounts.testPrompt') }}
+          <Icon name="chat" size="sm" :stroke-width="2" />
+          {{
+            supportsImageTest
+              ? t('admin.accounts.imageTestMode')
+              : t('admin.accounts.testPrompt')
+          }}
         </span>
       </div>
     </div>
@@ -135,8 +199,7 @@
       <div class="flex justify-end gap-3">
         <button
           @click="handleClose"
-          class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-600 hover:bg-gray-200 dark:hover:bg-dark-500 rounded-lg transition-colors"
-          :disabled="status === 'connecting'"
+          class="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
         >
           {{ t('common.close') }}
         </button>
@@ -144,48 +207,62 @@
           @click="startTest"
           :disabled="status === 'connecting' || !selectedModelId"
           :class="[
-            'px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2',
+            'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
             status === 'connecting' || !selectedModelId
-              ? 'bg-primary-400 text-white cursor-not-allowed'
+              ? 'cursor-not-allowed bg-primary-400 text-white'
               : status === 'success'
-                ? 'bg-green-500 hover:bg-green-600 text-white'
+                ? 'bg-green-500 text-white hover:bg-green-600'
                 : status === 'error'
-                  ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                  : 'bg-primary-500 hover:bg-primary-600 text-white'
+                  ? 'bg-orange-500 text-white hover:bg-orange-600'
+                  : 'bg-primary-500 text-white hover:bg-primary-600'
           ]"
         >
-          <svg v-if="status === 'connecting'" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <svg v-else-if="status === 'idle'" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <Icon
+            v-if="status === 'connecting'"
+            name="refresh"
+            size="sm"
+            class="animate-spin"
+            :stroke-width="2"
+          />
+          <Icon v-else-if="status === 'idle'" name="play" size="sm" :stroke-width="2" />
+          <Icon v-else name="refresh" size="sm" :stroke-width="2" />
           <span>
-            {{ status === 'connecting' ? t('admin.accounts.testing') : status === 'idle' ? t('admin.accounts.startTest') : t('admin.accounts.retry') }}
+            {{
+              status === 'connecting'
+                ? t('admin.accounts.testing')
+                : status === 'idle'
+                  ? t('admin.accounts.startTest')
+                  : t('admin.accounts.retry')
+            }}
           </span>
         </button>
       </div>
     </template>
-  </Modal>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Modal from '@/components/common/Modal.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select from '@/components/common/Select.vue'
+import TextArea from '@/components/common/TextArea.vue'
+import { Icon } from '@/components/icons'
+import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
 
 const { t } = useI18n()
+const { copyToClipboard } = useClipboard()
 
 interface OutputLine {
   text: string
   class: string
+}
+
+interface PreviewImage {
+  url: string
+  mimeType?: string
 }
 
 const props = defineProps<{
@@ -204,16 +281,62 @@ const streamingContent = ref('')
 const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
+const testPrompt = ref('')
 const loadingModels = ref(false)
-let eventSource: EventSource | null = null
+let abortController: AbortController | null = null
+const generatedImages = ref<PreviewImage[]>([])
+const testMode = ref<'default' | 'compact'>('default')
+const isOpenAIAccount = computed(() => props.account?.platform === 'openai')
+const openAITestModeOptions = computed(() => [
+  { value: 'default', label: t('admin.accounts.openai.testModeDefault') },
+  { value: 'compact', label: t('admin.accounts.openai.testModeCompact') }
+])
+const previewImageUrl = ref('')
+const prioritizedGeminiModels = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.0-flash']
+const supportsGeminiImageTest = computed(() => {
+  const modelID = selectedModelId.value.toLowerCase()
+  if (!modelID.startsWith('gemini-') || !modelID.includes('-image')) return false
+
+  return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
+})
+
+const supportsOpenAIImageTest = computed(() => {
+  const modelID = selectedModelId.value.toLowerCase()
+  if (!modelID.startsWith('gpt-image-')) return false
+  return props.account?.platform === 'openai'
+})
+
+const supportsImageTest = computed(() => supportsGeminiImageTest.value || supportsOpenAIImageTest.value)
+
+const sortTestModels = (models: ClaudeModel[]) => {
+  const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
+
+  return [...models].sort((a, b) => {
+    const aPriority = priorityMap.get(a.id) ?? Number.MAX_SAFE_INTEGER
+    const bPriority = priorityMap.get(b.id) ?? Number.MAX_SAFE_INTEGER
+    if (aPriority !== bPriority) return aPriority - bPriority
+    return 0
+  })
+}
 
 // Load available models when modal opens
-watch(() => props.show, async (newVal) => {
-  if (newVal && props.account) {
-    resetState()
-    await loadAvailableModels()
-  } else {
-    closeEventSource()
+watch(
+  () => props.show,
+  async (newVal) => {
+    if (newVal && props.account) {
+      testPrompt.value = ''
+      testMode.value = 'default'
+      resetState()
+      await loadAvailableModels()
+    } else {
+      abortStream()
+    }
+  }
+)
+
+watch(selectedModelId, () => {
+  if (supportsImageTest.value && !testPrompt.value.trim()) {
+    testPrompt.value = t('admin.accounts.imagePromptDefault')
   }
 })
 
@@ -223,12 +346,19 @@ const loadAvailableModels = async () => {
   loadingModels.value = true
   selectedModelId.value = '' // Reset selection before loading
   try {
-    availableModels.value = await adminAPI.accounts.getAvailableModels(props.account.id)
-    // Default to first model (usually Sonnet)
+    const models = await adminAPI.accounts.getAvailableModels(props.account.id)
+    availableModels.value = props.account.platform === 'gemini' || props.account.platform === 'antigravity'
+      ? sortTestModels(models)
+      : models
+    // Default selection by platform
     if (availableModels.value.length > 0) {
-      // Try to select Sonnet as default, otherwise use first model
-      const sonnetModel = availableModels.value.find(m => m.id.includes('sonnet'))
-      selectedModelId.value = sonnetModel?.id || availableModels.value[0].id
+      if (props.account.platform === 'gemini') {
+        selectedModelId.value = availableModels.value[0].id
+      } else {
+        // Try to select Sonnet as default, otherwise use first model
+        const sonnetModel = availableModels.value.find((m) => m.id.includes('sonnet'))
+        selectedModelId.value = sonnetModel?.id || availableModels.value[0].id
+      }
     }
   } catch (error) {
     console.error('Failed to load available models:', error)
@@ -245,17 +375,19 @@ const resetState = () => {
   outputLines.value = []
   streamingContent.value = ''
   errorMessage.value = ''
+  generatedImages.value = []
+  previewImageUrl.value = ''
 }
 
 const handleClose = () => {
-  closeEventSource()
+  abortStream()
   emit('close')
 }
 
-const closeEventSource = () => {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
+const abortStream = () => {
+  if (abortController) {
+    abortController.abort()
+    abortController = null
   }
 }
 
@@ -280,7 +412,9 @@ const startTest = async () => {
   addLine(t('admin.accounts.testAccountTypeLabel', { type: props.account.type }), 'text-gray-400')
   addLine('', 'text-gray-300')
 
-  closeEventSource()
+  abortStream()
+
+  abortController = new AbortController()
 
   try {
     // Create EventSource for SSE
@@ -290,10 +424,15 @@ const startTest = async () => {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model_id: selectedModelId.value })
+      body: JSON.stringify({
+        model_id: selectedModelId.value,
+        prompt: supportsImageTest.value ? testPrompt.value.trim() : '',
+        mode: isOpenAIAccount.value ? testMode.value : 'default'
+      }),
+      signal: abortController.signal
     })
 
     if (!response.ok) {
@@ -330,21 +469,39 @@ const startTest = async () => {
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      status.value = 'idle'
+      return
+    }
     status.value = 'error'
-    errorMessage.value = error.message || 'Unknown error'
-    addLine(`Error: ${errorMessage.value}`, 'text-red-400')
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    errorMessage.value = msg
+    addLine(`Error: ${msg}`, 'text-red-400')
   }
 }
 
-const handleEvent = (event: { type: string; text?: string; model?: string; success?: boolean; error?: string }) => {
+const handleEvent = (event: {
+  type: string
+  text?: string
+  model?: string
+  success?: boolean
+  error?: string
+  image_url?: string
+  mime_type?: string
+}) => {
   switch (event.type) {
     case 'test_start':
       addLine(t('admin.accounts.connectedToApi'), 'text-green-400')
       if (event.model) {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
       }
-      addLine(t('admin.accounts.sendingTestMessage'), 'text-gray-400')
+      addLine(
+        supportsImageTest.value
+            ? t('admin.accounts.sendingImageRequest')
+            : t('admin.accounts.sendingTestMessage'),
+        'text-gray-400'
+      )
       addLine('', 'text-gray-300')
       addLine(t('admin.accounts.response'), 'text-yellow-400')
       break
@@ -353,6 +510,22 @@ const handleEvent = (event: { type: string; text?: string; model?: string; succe
       if (event.text) {
         streamingContent.value += event.text
         scrollToBottom()
+      }
+      break
+
+    case 'status':
+      if (event.text) {
+        addLine(event.text, 'text-cyan-300')
+      }
+      break
+
+    case 'image':
+      if (event.image_url) {
+        generatedImages.value.push({
+          url: event.image_url,
+          mimeType: event.mime_type
+        })
+        addLine(t('admin.accounts.imageReceived', { count: generatedImages.value.length }), 'text-purple-300')
       }
       break
 
@@ -382,7 +555,18 @@ const handleEvent = (event: { type: string; text?: string; model?: string; succe
 }
 
 const copyOutput = () => {
-  const text = outputLines.value.map(l => l.text).join('\n')
-  navigator.clipboard.writeText(text)
+  const text = outputLines.value.map((l) => l.text).join('\n')
+  copyToClipboard(text, t('admin.accounts.outputCopied'))
 }
 </script>
+
+<style>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

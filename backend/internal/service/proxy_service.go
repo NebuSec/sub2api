@@ -2,18 +2,34 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"sub2api/internal/model"
-	"sub2api/internal/pkg/pagination"
-	"sub2api/internal/service/ports"
 
-	"gorm.io/gorm"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 var (
-	ErrProxyNotFound = errors.New("proxy not found")
+	ErrProxyNotFound = infraerrors.NotFound("PROXY_NOT_FOUND", "proxy not found")
+	ErrProxyInUse    = infraerrors.Conflict("PROXY_IN_USE", "proxy is in use by accounts")
 )
+
+type ProxyRepository interface {
+	Create(ctx context.Context, proxy *Proxy) error
+	GetByID(ctx context.Context, id int64) (*Proxy, error)
+	ListByIDs(ctx context.Context, ids []int64) ([]Proxy, error)
+	Update(ctx context.Context, proxy *Proxy) error
+	Delete(ctx context.Context, id int64) error
+
+	List(ctx context.Context, params pagination.PaginationParams) ([]Proxy, *pagination.PaginationResult, error)
+	ListWithFilters(ctx context.Context, params pagination.PaginationParams, protocol, status, search string) ([]Proxy, *pagination.PaginationResult, error)
+	ListWithFiltersAndAccountCount(ctx context.Context, params pagination.PaginationParams, protocol, status, search string) ([]ProxyWithAccountCount, *pagination.PaginationResult, error)
+	ListActive(ctx context.Context) ([]Proxy, error)
+	ListActiveWithAccountCount(ctx context.Context) ([]ProxyWithAccountCount, error)
+
+	ExistsByHostPortAuth(ctx context.Context, host string, port int, username, password string) (bool, error)
+	CountAccountsByProxyID(ctx context.Context, proxyID int64) (int64, error)
+	ListAccountSummariesByProxyID(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error)
+}
 
 // CreateProxyRequest 创建代理请求
 type CreateProxyRequest struct {
@@ -38,27 +54,27 @@ type UpdateProxyRequest struct {
 
 // ProxyService 代理管理服务
 type ProxyService struct {
-	proxyRepo ports.ProxyRepository
+	proxyRepo ProxyRepository
 }
 
 // NewProxyService 创建代理服务实例
-func NewProxyService(proxyRepo ports.ProxyRepository) *ProxyService {
+func NewProxyService(proxyRepo ProxyRepository) *ProxyService {
 	return &ProxyService{
 		proxyRepo: proxyRepo,
 	}
 }
 
 // Create 创建代理
-func (s *ProxyService) Create(ctx context.Context, req CreateProxyRequest) (*model.Proxy, error) {
+func (s *ProxyService) Create(ctx context.Context, req CreateProxyRequest) (*Proxy, error) {
 	// 创建代理
-	proxy := &model.Proxy{
+	proxy := &Proxy{
 		Name:     req.Name,
 		Protocol: req.Protocol,
 		Host:     req.Host,
 		Port:     req.Port,
 		Username: req.Username,
 		Password: req.Password,
-		Status:   model.StatusActive,
+		Status:   StatusActive,
 	}
 
 	if err := s.proxyRepo.Create(ctx, proxy); err != nil {
@@ -69,19 +85,16 @@ func (s *ProxyService) Create(ctx context.Context, req CreateProxyRequest) (*mod
 }
 
 // GetByID 根据ID获取代理
-func (s *ProxyService) GetByID(ctx context.Context, id int64) (*model.Proxy, error) {
+func (s *ProxyService) GetByID(ctx context.Context, id int64) (*Proxy, error) {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrProxyNotFound
-		}
 		return nil, fmt.Errorf("get proxy: %w", err)
 	}
 	return proxy, nil
 }
 
 // List 获取代理列表
-func (s *ProxyService) List(ctx context.Context, params pagination.PaginationParams) ([]model.Proxy, *pagination.PaginationResult, error) {
+func (s *ProxyService) List(ctx context.Context, params pagination.PaginationParams) ([]Proxy, *pagination.PaginationResult, error) {
 	proxies, pagination, err := s.proxyRepo.List(ctx, params)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list proxies: %w", err)
@@ -90,7 +103,7 @@ func (s *ProxyService) List(ctx context.Context, params pagination.PaginationPar
 }
 
 // ListActive 获取活跃代理列表
-func (s *ProxyService) ListActive(ctx context.Context) ([]model.Proxy, error) {
+func (s *ProxyService) ListActive(ctx context.Context) ([]Proxy, error) {
 	proxies, err := s.proxyRepo.ListActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list active proxies: %w", err)
@@ -99,12 +112,9 @@ func (s *ProxyService) ListActive(ctx context.Context) ([]model.Proxy, error) {
 }
 
 // Update 更新代理
-func (s *ProxyService) Update(ctx context.Context, id int64, req UpdateProxyRequest) (*model.Proxy, error) {
+func (s *ProxyService) Update(ctx context.Context, id int64, req UpdateProxyRequest) (*Proxy, error) {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrProxyNotFound
-		}
 		return nil, fmt.Errorf("get proxy: %w", err)
 	}
 
@@ -149,9 +159,6 @@ func (s *ProxyService) Delete(ctx context.Context, id int64) error {
 	// 检查代理是否存在
 	_, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrProxyNotFound
-		}
 		return fmt.Errorf("get proxy: %w", err)
 	}
 
@@ -166,9 +173,6 @@ func (s *ProxyService) Delete(ctx context.Context, id int64) error {
 func (s *ProxyService) TestConnection(ctx context.Context, id int64) error {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrProxyNotFound
-		}
 		return fmt.Errorf("get proxy: %w", err)
 	}
 
@@ -183,9 +187,6 @@ func (s *ProxyService) TestConnection(ctx context.Context, id int64) error {
 func (s *ProxyService) GetURL(ctx context.Context, id int64) (string, error) {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", ErrProxyNotFound
-		}
 		return "", fmt.Errorf("get proxy: %w", err)
 	}
 

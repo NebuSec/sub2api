@@ -3,27 +3,73 @@ package setup
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
-	"sub2api/internal/model"
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
+	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 // Config paths
 const (
-	ConfigFile = "config.yaml"
-	EnvFile    = ".env"
+	ConfigFileName             = "config.yaml"
+	InstallLockFile            = ".installed"
+	defaultUserConcurrency     = 5
+	simpleModeAdminConcurrency = 30
 )
+
+func setupDefaultAdminConcurrency() int {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("RUN_MODE")), config.RunModeSimple) {
+		return simpleModeAdminConcurrency
+	}
+	return defaultUserConcurrency
+}
+
+// GetDataDir returns the data directory for storing config and lock files.
+// Priority: DATA_DIR env > /app/data (if exists and writable) > current directory
+func GetDataDir() string {
+	// Check DATA_DIR environment variable first
+	if dir := os.Getenv("DATA_DIR"); dir != "" {
+		return dir
+	}
+
+	// Check if /app/data exists and is writable (Docker environment)
+	dockerDataDir := "/app/data"
+	if info, err := os.Stat(dockerDataDir); err == nil && info.IsDir() {
+		// Try to check if writable by creating a temp file
+		testFile := dockerDataDir + "/.write_test"
+		if f, err := os.Create(testFile); err == nil {
+			_ = f.Close()
+			_ = os.Remove(testFile)
+			return dockerDataDir
+		}
+	}
+
+	// Default to current directory
+	return "."
+}
+
+// GetConfigFilePath returns the full path to config.yaml
+func GetConfigFilePath() string {
+	return GetDataDir() + "/" + ConfigFileName
+}
+
+// GetInstallLockPath returns the full path to .installed lock file
+func GetInstallLockPath() string {
+	return GetDataDir() + "/" + InstallLockFile
+}
 
 // SetupConfig holds the setup configuration
 type SetupConfig struct {
@@ -45,10 +91,11 @@ type DatabaseConfig struct {
 }
 
 type RedisConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	Password string `json:"password" yaml:"password"`
-	DB       int    `json:"db" yaml:"db"`
+	Host      string `json:"host" yaml:"host"`
+	Port      int    `json:"port" yaml:"port"`
+	Password  string `json:"password" yaml:"password"`
+	DB        int    `json:"db" yaml:"db"`
+	EnableTLS bool   `json:"enable_tls" yaml:"enable_tls"`
 }
 
 type AdminConfig struct {
@@ -67,104 +114,131 @@ type JWTConfig struct {
 	ExpireHour int    `json:"expire_hour" yaml:"expire_hour"`
 }
 
+const (
+	adminBootstrapReasonEmptyDatabase          = "empty_database"
+	adminBootstrapReasonAdminExists            = "admin_exists"
+	adminBootstrapReasonUsersExistWithoutAdmin = "users_exist_without_admin"
+)
+
+type adminBootstrapDecision struct {
+	shouldCreate bool
+	reason       string
+}
+
+func decideAdminBootstrap(totalUsers, adminUsers int64) adminBootstrapDecision {
+	if adminUsers > 0 {
+		return adminBootstrapDecision{
+			shouldCreate: false,
+			reason:       adminBootstrapReasonAdminExists,
+		}
+	}
+	if totalUsers > 0 {
+		return adminBootstrapDecision{
+			shouldCreate: false,
+			reason:       adminBootstrapReasonUsersExistWithoutAdmin,
+		}
+	}
+	return adminBootstrapDecision{
+		shouldCreate: true,
+		reason:       adminBootstrapReasonEmptyDatabase,
+	}
+}
+
 // NeedsSetup checks if the system needs initial setup
 // Uses multiple checks to prevent attackers from forcing re-setup by deleting config
 func NeedsSetup() bool {
 	// Check 1: Config file must not exist
-	if _, err := os.Stat(ConfigFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(GetConfigFilePath()); !os.IsNotExist(err) {
 		return false // Config exists, no setup needed
 	}
 
 	// Check 2: Installation lock file (harder to bypass)
-	lockFile := ".installed"
-	if _, err := os.Stat(lockFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(GetInstallLockPath()); !os.IsNotExist(err) {
 		return false // Lock file exists, already installed
 	}
 
 	return true
 }
 
+func buildPostgresDSN(cfg *DatabaseConfig, dbName string) string {
+	return fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, dbName, cfg.SSLMode,
+	)
+}
+
+func buildDatabaseConnectionDSNs(cfg *DatabaseConfig) (bootstrapDSN, targetDSN string) {
+	return buildPostgresDSN(cfg, "postgres"), buildPostgresDSN(cfg, cfg.DBName)
+}
+
 // TestDatabaseConnection tests the database connection and creates database if not exists
 func TestDatabaseConnection(cfg *DatabaseConfig) error {
-	// First, connect to the default 'postgres' database to check/create target database
-	defaultDSN := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.SSLMode,
-	)
+	// First, connect to the default 'postgres' database to check/create target database.
+	// Connecting to cfg.DBName here fails when the target database has not been
+	// created yet, so the bootstrap connection must use PostgreSQL's maintenance DB.
+	defaultDSN, targetDSN := buildDatabaseConnectionDSNs(cfg)
 
-	db, err := gorm.Open(postgres.Open(defaultDSN), &gorm.Config{})
+	db, err := sql.Open("postgres", defaultDSN)
 	if err != nil {
 		return fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get db instance: %w", err)
-	}
 	defer func() {
-		if sqlDB == nil {
+		if db == nil {
 			return
 		}
-		if err := sqlDB.Close(); err != nil {
-			log.Printf("failed to close postgres connection: %v", err)
+		if err := db.Close(); err != nil {
+			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 		}
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := sqlDB.PingContext(ctx); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("ping failed: %w", err)
 	}
 
 	// Check if target database exists
 	var exists bool
-	row := sqlDB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", cfg.DBName)
+	row := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", cfg.DBName)
 	if err := row.Scan(&exists); err != nil {
 		return fmt.Errorf("failed to check database existence: %w", err)
 	}
 
 	// Create database if not exists
 	if !exists {
+		// 注意：数据库名不能参数化，依赖前置输入校验保障安全。
 		// Note: Database names cannot be parameterized, but we've already validated cfg.DBName
 		// in the handler using validateDBName() which only allows [a-zA-Z][a-zA-Z0-9_]*
-		_, err := sqlDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", cfg.DBName))
+		_, err := db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", cfg.DBName))
 		if err != nil {
 			return fmt.Errorf("failed to create database '%s': %w", cfg.DBName, err)
 		}
-		log.Printf("Database '%s' created successfully", cfg.DBName)
+		logger.LegacyPrintf("setup", "Database '%s' created successfully", cfg.DBName)
 	}
 
 	// Now connect to the target database to verify
-	if err := sqlDB.Close(); err != nil {
-		log.Printf("failed to close postgres connection: %v", err)
+	if err := db.Close(); err != nil {
+		logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 	}
-	sqlDB = nil
+	db = nil
 
-	targetDSN := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
-	)
-
-	targetDB, err := gorm.Open(postgres.Open(targetDSN), &gorm.Config{})
+	targetDB, err := sql.Open("postgres", targetDSN)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database '%s': %w", cfg.DBName, err)
 	}
 
-	targetSqlDB, err := targetDB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get target db instance: %w", err)
-	}
 	defer func() {
-		if err := targetSqlDB.Close(); err != nil {
-			log.Printf("failed to close postgres connection: %v", err)
+		if err := targetDB.Close(); err != nil {
+			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 		}
 	}()
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
 
-	if err := targetSqlDB.PingContext(ctx2); err != nil {
+	if err := targetDB.PingContext(ctx2); err != nil {
 		return fmt.Errorf("ping target database failed: %w", err)
 	}
 
@@ -173,14 +247,23 @@ func TestDatabaseConnection(cfg *DatabaseConfig) error {
 
 // TestRedisConnection tests the Redis connection
 func TestRedisConnection(cfg *RedisConfig) error {
-	rdb := redis.NewClient(&redis.Options{
+	opts := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Password: cfg.Password,
 		DB:       cfg.DB,
-	})
+	}
+
+	if cfg.EnableTLS {
+		opts.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: cfg.Host,
+		}
+	}
+
+	rdb := redis.NewClient(opts)
 	defer func() {
 		if err := rdb.Close(); err != nil {
-			log.Printf("failed to close redis client: %v", err)
+			logger.LegacyPrintf("setup", "failed to close redis client: %v", err)
 		}
 	}()
 
@@ -208,6 +291,7 @@ func Install(cfg *SetupConfig) error {
 			return fmt.Errorf("failed to generate jwt secret: %w", err)
 		}
 		cfg.JWT.Secret = secret
+		logger.LegacyPrintf("setup", "%s", "Warning: JWT secret auto-generated. Consider setting a fixed secret for production.")
 	}
 
 	// Test connections
@@ -224,8 +308,8 @@ func Install(cfg *SetupConfig) error {
 		return fmt.Errorf("database initialization failed: %w", err)
 	}
 
-	// Create admin user
-	if err := createAdminUser(cfg); err != nil {
+	// Create admin user (only when database is empty and no admin exists).
+	if _, _, err := createAdminUser(cfg); err != nil {
 		return fmt.Errorf("admin user creation failed: %w", err)
 	}
 
@@ -244,9 +328,8 @@ func Install(cfg *SetupConfig) error {
 
 // createInstallLock creates a lock file to prevent re-installation attacks
 func createInstallLock() error {
-	lockFile := ".installed"
 	content := fmt.Sprintf("installed_at=%s\n", time.Now().UTC().Format(time.RFC3339))
-	return os.WriteFile(lockFile, []byte(content), 0400) // Read-only for owner
+	return os.WriteFile(GetInstallLockPath(), []byte(content), 0400) // Read-only for owner
 }
 
 func initializeDatabase(cfg *SetupConfig) error {
@@ -256,72 +339,98 @@ func initializeDatabase(cfg *SetupConfig) error {
 		cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return err
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
 	defer func() {
-		if err := sqlDB.Close(); err != nil {
-			log.Printf("failed to close postgres connection: %v", err)
+		if err := db.Close(); err != nil {
+			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 		}
 	}()
 
-	// 使用 model 包的 AutoMigrate，确保模型定义统一
-	return model.AutoMigrate(db)
+	migrationCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return repository.ApplyMigrations(migrationCtx, db)
 }
 
-func createAdminUser(cfg *SetupConfig) error {
+func createAdminUser(cfg *SetupConfig) (bool, string, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
 		cfg.Database.Password, cfg.Database.DBName, cfg.Database.SSLMode,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return err
+		return false, "", err
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
 	defer func() {
-		if err := sqlDB.Close(); err != nil {
-			log.Printf("failed to close postgres connection: %v", err)
+		if err := db.Close(); err != nil {
+			logger.LegacyPrintf("setup", "failed to close postgres connection: %v", err)
 		}
 	}()
 
-	// Check if admin already exists
-	var count int64
-	db.Model(&model.User{}).Where("role = ?", "admin").Count(&count)
-	if count > 0 {
-		return nil // Admin already exists
+	// 使用超时上下文避免安装流程因数据库异常而长时间阻塞。
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var totalUsers int64
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users").Scan(&totalUsers); err != nil {
+		return false, "", err
+	}
+	var adminUsers int64
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users WHERE role = $1", service.RoleAdmin).Scan(&adminUsers); err != nil {
+		return false, "", err
+	}
+	decision := decideAdminBootstrap(totalUsers, adminUsers)
+	if !decision.shouldCreate {
+		return false, decision.reason, nil
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(cfg.Admin.Password), bcrypt.DefaultCost)
+	if strings.TrimSpace(cfg.Admin.Password) == "" {
+		password, genErr := generateSecret(16)
+		if genErr != nil {
+			return false, "", fmt.Errorf("failed to generate admin password: %w", genErr)
+		}
+		cfg.Admin.Password = password
+		fmt.Printf("Generated admin password (one-time): %s\n", cfg.Admin.Password)
+		fmt.Println("IMPORTANT: Save this password! It will not be shown again.")
+	}
+
+	admin := &service.User{
+		Email:       cfg.Admin.Email,
+		Role:        service.RoleAdmin,
+		Status:      service.StatusActive,
+		Balance:     0,
+		Concurrency: setupDefaultAdminConcurrency(),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := admin.SetPassword(cfg.Admin.Password); err != nil {
+		return false, "", err
+	}
+
+	_, err = db.ExecContext(
+		ctx,
+		`INSERT INTO users (email, password_hash, role, balance, concurrency, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		admin.Email,
+		admin.PasswordHash,
+		admin.Role,
+		admin.Balance,
+		admin.Concurrency,
+		admin.Status,
+		admin.CreatedAt,
+		admin.UpdatedAt,
+	)
 	if err != nil {
-		return err
+		return false, "", err
 	}
-
-	// Create admin user
-	admin := &model.User{
-		Email:        cfg.Admin.Email,
-		PasswordHash: string(hashedPassword),
-		Role:         model.RoleAdmin,
-		Status:       model.StatusActive,
-		Balance:      0,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}
-
-	return db.Create(admin).Error
+	return true, decision.reason, nil
 }
 
 func writeConfigFile(cfg *SetupConfig) error {
@@ -341,7 +450,10 @@ func writeConfigFile(cfg *SetupConfig) error {
 			ExpireHour int    `yaml:"expire_hour"`
 		} `yaml:"jwt"`
 		Default struct {
-			GroupID uint `yaml:"group_id"`
+			UserConcurrency int     `yaml:"user_concurrency"`
+			UserBalance     float64 `yaml:"user_balance"`
+			APIKeyPrefix    string  `yaml:"api_key_prefix"`
+			RateMultiplier  float64 `yaml:"rate_multiplier"`
 		} `yaml:"default"`
 		RateLimit struct {
 			RequestsPerMinute int `yaml:"requests_per_minute"`
@@ -360,9 +472,15 @@ func writeConfigFile(cfg *SetupConfig) error {
 			ExpireHour: cfg.JWT.ExpireHour,
 		},
 		Default: struct {
-			GroupID uint `yaml:"group_id"`
+			UserConcurrency int     `yaml:"user_concurrency"`
+			UserBalance     float64 `yaml:"user_balance"`
+			APIKeyPrefix    string  `yaml:"api_key_prefix"`
+			RateMultiplier  float64 `yaml:"rate_multiplier"`
 		}{
-			GroupID: 1,
+			UserConcurrency: defaultUserConcurrency,
+			UserBalance:     0,
+			APIKeyPrefix:    "sk-",
+			RateMultiplier:  1.0,
 		},
 		RateLimit: struct {
 			RequestsPerMinute int `yaml:"requests_per_minute"`
@@ -379,7 +497,7 @@ func writeConfigFile(cfg *SetupConfig) error {
 		return err
 	}
 
-	return os.WriteFile(ConfigFile, data, 0600)
+	return os.WriteFile(GetConfigFilePath(), data, 0600)
 }
 
 func generateSecret(length int) (string, error) {
@@ -421,7 +539,8 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 // AutoSetupFromEnv performs automatic setup using environment variables
 // This is designed for Docker deployment where all config is passed via env vars
 func AutoSetupFromEnv() error {
-	log.Println("Auto setup enabled, configuring from environment variables...")
+	logger.LegacyPrintf("setup", "%s", "Auto setup enabled, configuring from environment variables...")
+	logger.LegacyPrintf("setup", "Data directory: %s", GetDataDir())
 
 	// Get timezone from TZ or TIMEZONE env var (TZ is standard for Docker)
 	tz := getEnvOrDefault("TZ", "")
@@ -440,10 +559,11 @@ func AutoSetupFromEnv() error {
 			SSLMode:  getEnvOrDefault("DATABASE_SSLMODE", "disable"),
 		},
 		Redis: RedisConfig{
-			Host:     getEnvOrDefault("REDIS_HOST", "localhost"),
-			Port:     getEnvIntOrDefault("REDIS_PORT", 6379),
-			Password: getEnvOrDefault("REDIS_PASSWORD", ""),
-			DB:       getEnvIntOrDefault("REDIS_DB", 0),
+			Host:      getEnvOrDefault("REDIS_HOST", "localhost"),
+			Port:      getEnvIntOrDefault("REDIS_PORT", 6379),
+			Password:  getEnvOrDefault("REDIS_PASSWORD", ""),
+			DB:        getEnvIntOrDefault("REDIS_DB", 0),
+			EnableTLS: getEnvOrDefault("REDIS_ENABLE_TLS", "false") == "true",
 		},
 		Admin: AdminConfig{
 			Email:    getEnvOrDefault("ADMIN_EMAIL", "admin@sub2api.local"),
@@ -468,61 +588,62 @@ func AutoSetupFromEnv() error {
 			return fmt.Errorf("failed to generate jwt secret: %w", err)
 		}
 		cfg.JWT.Secret = secret
-		log.Println("Generated JWT secret automatically")
-	}
-
-	// Generate admin password if not provided
-	if cfg.Admin.Password == "" {
-		password, err := generateSecret(16)
-		if err != nil {
-			return fmt.Errorf("failed to generate admin password: %w", err)
-		}
-		cfg.Admin.Password = password
-		log.Printf("Generated admin password: %s", cfg.Admin.Password)
-		log.Println("IMPORTANT: Save this password! It will not be shown again.")
+		logger.LegacyPrintf("setup", "%s", "Warning: JWT secret auto-generated. Consider setting a fixed secret for production.")
 	}
 
 	// Test database connection
-	log.Println("Testing database connection...")
+	logger.LegacyPrintf("setup", "%s", "Testing database connection...")
 	if err := TestDatabaseConnection(&cfg.Database); err != nil {
 		return fmt.Errorf("database connection failed: %w", err)
 	}
-	log.Println("Database connection successful")
+	logger.LegacyPrintf("setup", "%s", "Database connection successful")
 
 	// Test Redis connection
-	log.Println("Testing Redis connection...")
+	logger.LegacyPrintf("setup", "%s", "Testing Redis connection...")
 	if err := TestRedisConnection(&cfg.Redis); err != nil {
 		return fmt.Errorf("redis connection failed: %w", err)
 	}
-	log.Println("Redis connection successful")
+	logger.LegacyPrintf("setup", "%s", "Redis connection successful")
 
 	// Initialize database
-	log.Println("Initializing database...")
+	logger.LegacyPrintf("setup", "%s", "Initializing database...")
 	if err := initializeDatabase(cfg); err != nil {
 		return fmt.Errorf("database initialization failed: %w", err)
 	}
-	log.Println("Database initialized successfully")
+	logger.LegacyPrintf("setup", "%s", "Database initialized successfully")
 
 	// Create admin user
-	log.Println("Creating admin user...")
-	if err := createAdminUser(cfg); err != nil {
+	logger.LegacyPrintf("setup", "%s", "Creating admin user...")
+	created, reason, err := createAdminUser(cfg)
+	if err != nil {
 		return fmt.Errorf("admin user creation failed: %w", err)
 	}
-	log.Printf("Admin user created: %s", cfg.Admin.Email)
+	if created {
+		logger.LegacyPrintf("setup", "Admin user created: %s", cfg.Admin.Email)
+	} else {
+		switch reason {
+		case adminBootstrapReasonAdminExists:
+			logger.LegacyPrintf("setup", "%s", "Admin user already exists, skipping admin bootstrap")
+		case adminBootstrapReasonUsersExistWithoutAdmin:
+			logger.LegacyPrintf("setup", "%s", "Database already has user data; skipping auto admin bootstrap to avoid password overwrite")
+		default:
+			logger.LegacyPrintf("setup", "%s", "Admin bootstrap skipped")
+		}
+	}
 
 	// Write config file
-	log.Println("Writing configuration file...")
+	logger.LegacyPrintf("setup", "%s", "Writing configuration file...")
 	if err := writeConfigFile(cfg); err != nil {
 		return fmt.Errorf("config file creation failed: %w", err)
 	}
-	log.Println("Configuration file created")
+	logger.LegacyPrintf("setup", "%s", "Configuration file created")
 
 	// Create installation lock file
 	if err := createInstallLock(); err != nil {
 		return fmt.Errorf("failed to create install lock: %w", err)
 	}
-	log.Println("Installation lock created")
+	logger.LegacyPrintf("setup", "%s", "Installation lock created")
 
-	log.Println("Auto setup completed successfully!")
+	logger.LegacyPrintf("setup", "%s", "Auto setup completed successfully!")
 	return nil
 }

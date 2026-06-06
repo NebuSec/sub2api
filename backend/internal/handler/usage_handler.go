@@ -1,47 +1,51 @@
 package handler
 
 import (
+	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"sub2api/internal/model"
-	"sub2api/internal/pkg/pagination"
-	"sub2api/internal/pkg/response"
-	"sub2api/internal/pkg/timezone"
-	"sub2api/internal/repository"
-	"sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 // UsageHandler handles usage-related requests
 type UsageHandler struct {
-	usageService  *service.UsageService
-	usageRepo     *repository.UsageLogRepository
-	apiKeyService *service.ApiKeyService
+	usageService   *service.UsageService
+	apiKeyService  *service.APIKeyService
+	opsService     *service.OpsService
+	settingService *service.SettingService
 }
 
 // NewUsageHandler creates a new UsageHandler
-func NewUsageHandler(usageService *service.UsageService, usageRepo *repository.UsageLogRepository, apiKeyService *service.ApiKeyService) *UsageHandler {
+func NewUsageHandler(
+	usageService *service.UsageService,
+	apiKeyService *service.APIKeyService,
+	opsService *service.OpsService,
+	settingService *service.SettingService,
+) *UsageHandler {
 	return &UsageHandler{
-		usageService:  usageService,
-		usageRepo:     usageRepo,
-		apiKeyService: apiKeyService,
+		usageService:   usageService,
+		apiKeyService:  apiKeyService,
+		opsService:     opsService,
+		settingService: settingService,
 	}
 }
 
 // List handles listing usage records with pagination
 // GET /api/v1/usage
 func (h *UsageHandler) List(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	user, ok := userValue.(*model.User)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
-		response.InternalError(c, "Invalid user context")
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
@@ -58,10 +62,10 @@ func (h *UsageHandler) List(c *gin.Context) {
 		// [Security Fix] Verify API Key ownership to prevent horizontal privilege escalation
 		apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), id)
 		if err != nil {
-			response.NotFound(c, "API key not found")
+			response.ErrorFrom(c, err)
 			return
 		}
-		if apiKey.UserID != user.ID {
+		if apiKey.UserID != subject.UserID {
 			response.Forbidden(c, "Not authorized to access this API key's usage records")
 			return
 		}
@@ -69,36 +73,209 @@ func (h *UsageHandler) List(c *gin.Context) {
 		apiKeyID = id
 	}
 
-	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
-	var records []model.UsageLog
-	var result *pagination.PaginationResult
-	var err error
+	// Parse additional filters
+	model := c.Query("model")
 
-	if apiKeyID > 0 {
-		records, result, err = h.usageService.ListByApiKey(c.Request.Context(), apiKeyID, params)
-	} else {
-		records, result, err = h.usageService.ListByUser(c.Request.Context(), user.ID, params)
+	var requestType *int16
+	var stream *bool
+	if requestTypeStr := strings.TrimSpace(c.Query("request_type")); requestTypeStr != "" {
+		parsed, err := service.ParseUsageRequestType(requestTypeStr)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		value := int16(parsed)
+		requestType = &value
+	} else if streamStr := c.Query("stream"); streamStr != "" {
+		val, err := strconv.ParseBool(streamStr)
+		if err != nil {
+			response.BadRequest(c, "Invalid stream value, use true or false")
+			return
+		}
+		stream = &val
 	}
+
+	var billingType *int8
+	if billingTypeStr := c.Query("billing_type"); billingTypeStr != "" {
+		val, err := strconv.ParseInt(billingTypeStr, 10, 8)
+		if err != nil {
+			response.BadRequest(c, "Invalid billing_type")
+			return
+		}
+		bt := int8(val)
+		billingType = &bt
+	}
+
+	// Parse date range
+	var startTime, endTime *time.Time
+	userTZ := c.Query("timezone") // Get user's timezone from request
+	if startDateStr := c.Query("start_date"); startDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		startTime = &t
+	}
+
+	if endDateStr := c.Query("end_date"); endDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		// Use half-open range [start, end), move to next calendar day start (DST-safe).
+		t = t.AddDate(0, 0, 1)
+		endTime = &t
+	}
+
+	params := pagination.PaginationParams{
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "created_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	}
+	filters := usagestats.UsageLogFilters{
+		UserID:      subject.UserID, // Always filter by current user for security
+		APIKeyID:    apiKeyID,
+		Model:       model,
+		RequestType: requestType,
+		Stream:      stream,
+		BillingType: billingType,
+		StartTime:   startTime,
+		EndTime:     endTime,
+	}
+
+	records, result, err := h.usageService.ListWithFilters(c.Request.Context(), params, filters)
 	if err != nil {
-		response.InternalError(c, "Failed to list usage records: "+err.Error())
+		response.ErrorFrom(c, err)
 		return
 	}
 
-	response.Paginated(c, records, result.Total, page, pageSize)
+	out := make([]dto.UsageLog, 0, len(records))
+	for i := range records {
+		out = append(out, *dto.UsageLogFromService(&records[i]))
+	}
+	response.Paginated(c, out, result.Total, page, pageSize)
+}
+
+// ListErrors handles listing the current user's failed requests (redacted).
+// GET /api/v1/usage/errors
+func (h *UsageHandler) ListErrors(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	// Visibility switch (fail-closed). Defense-in-depth: frontend also hides the tab.
+	if h.settingService == nil || !h.settingService.IsUserErrorViewAllowed(c.Request.Context()) {
+		response.Forbidden(c, "Error requests view is disabled")
+		return
+	}
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+
+	// Date range (half-open [start, end)), reuse usage-list semantics.
+	userTZ := c.Query("timezone")
+	if startDateStr := c.Query("start_date"); startDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		filter.StartTime = &t
+	}
+	if endDateStr := c.Query("end_date"); endDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		t = t.AddDate(0, 0, 1)
+		filter.EndTime = &t
+	}
+
+	filter.Model = strings.TrimSpace(c.Query("model"))
+
+	if k := strings.TrimSpace(c.Query("api_key_id")); k != "" {
+		n, err := strconv.ParseInt(k, 10, 64)
+		if err != nil || n < 0 {
+			response.BadRequest(c, "Invalid api_key_id")
+			return
+		}
+		if n > 0 {
+			filter.APIKeyID = &n
+		}
+	}
+
+	if sc := strings.TrimSpace(c.Query("status_code")); sc != "" {
+		n, err := strconv.Atoi(sc)
+		if err != nil || n < 0 {
+			response.BadRequest(c, "Invalid status_code")
+			return
+		}
+		filter.StatusCodes = []int{n}
+	}
+
+	if cat := strings.TrimSpace(c.Query("category")); cat != "" {
+		phases, types := service.CategoryToFilter(cat)
+		filter.ErrorPhasesAny = phases
+		filter.ErrorTypesAny = types
+	}
+
+	result, err := h.opsService.ListUserErrorRequests(c.Request.Context(), subject.UserID, filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, result.Items, int64(result.Total), result.Page, result.PageSize)
+}
+
+// GetErrorDetail handles fetching one of the current user's failed-request details (redacted).
+// GET /api/v1/usage/errors/:id
+func (h *UsageHandler) GetErrorDetail(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.settingService == nil || !h.settingService.IsUserErrorViewAllowed(c.Request.Context()) {
+		response.Forbidden(c, "Error requests view is disabled")
+		return
+	}
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid id")
+		return
+	}
+	detail, err := h.opsService.GetUserErrorRequestDetail(c.Request.Context(), subject.UserID, id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, detail)
 }
 
 // GetByID handles getting a single usage record
 // GET /api/v1/usage/:id
 func (h *UsageHandler) GetByID(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	user, ok := userValue.(*model.User)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
-		response.InternalError(c, "Invalid user context")
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
@@ -110,31 +287,25 @@ func (h *UsageHandler) GetByID(c *gin.Context) {
 
 	record, err := h.usageService.GetByID(c.Request.Context(), usageID)
 	if err != nil {
-		response.NotFound(c, "Usage record not found")
+		response.ErrorFrom(c, err)
 		return
 	}
 
 	// 验证所有权
-	if record.UserID != user.ID {
+	if record.UserID != subject.UserID {
 		response.Forbidden(c, "Not authorized to access this record")
 		return
 	}
 
-	response.Success(c, record)
+	response.Success(c, dto.UsageLogFromService(record))
 }
 
 // Stats handles getting usage statistics
 // GET /api/v1/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	user, ok := userValue.(*model.User)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
-		response.InternalError(c, "Invalid user context")
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
@@ -152,7 +323,7 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 			response.NotFound(c, "API key not found")
 			return
 		}
-		if apiKey.UserID != user.ID {
+		if apiKey.UserID != subject.UserID {
 			response.Forbidden(c, "Not authorized to access this API key's statistics")
 			return
 		}
@@ -161,7 +332,8 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	}
 
 	// 获取时间范围参数
-	now := timezone.Now()
+	userTZ := c.Query("timezone") // Get user's timezone from request
+	now := timezone.NowInUserLocation(userTZ)
 	var startTime, endTime time.Time
 
 	// 优先使用 start_date 和 end_date 参数
@@ -171,30 +343,30 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	if startDateStr != "" && endDateStr != "" {
 		// 使用自定义日期范围
 		var err error
-		startTime, err = timezone.ParseInLocation("2006-01-02", startDateStr)
+		startTime, err = timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
 			response.BadRequest(c, "Invalid start_date format, use YYYY-MM-DD")
 			return
 		}
-		endTime, err = timezone.ParseInLocation("2006-01-02", endDateStr)
+		endTime, err = timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
 		if err != nil {
 			response.BadRequest(c, "Invalid end_date format, use YYYY-MM-DD")
 			return
 		}
-		// 设置结束时间为当天结束
-		endTime = endTime.Add(24*time.Hour - time.Nanosecond)
+		// 与 SQL 条件 created_at < end 对齐，使用次日 00:00 作为上边界（DST-safe）。
+		endTime = endTime.AddDate(0, 0, 1)
 	} else {
 		// 使用 period 参数
 		period := c.DefaultQuery("period", "today")
 		switch period {
 		case "today":
-			startTime = timezone.StartOfDay(now)
+			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
 		case "week":
 			startTime = now.AddDate(0, 0, -7)
 		case "month":
 			startTime = now.AddDate(0, -1, 0)
 		default:
-			startTime = timezone.StartOfDay(now)
+			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
 		}
 		endTime = now
 	}
@@ -202,12 +374,12 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 	var stats *service.UsageStats
 	var err error
 	if apiKeyID > 0 {
-		stats, err = h.usageService.GetStatsByApiKey(c.Request.Context(), apiKeyID, startTime, endTime)
+		stats, err = h.usageService.GetStatsByAPIKey(c.Request.Context(), apiKeyID, startTime, endTime)
 	} else {
-		stats, err = h.usageService.GetStatsByUser(c.Request.Context(), user.ID, startTime, endTime)
+		stats, err = h.usageService.GetStatsByUser(c.Request.Context(), subject.UserID, startTime, endTime)
 	}
 	if err != nil {
-		response.InternalError(c, "Failed to get usage statistics: "+err.Error())
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -215,54 +387,73 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 }
 
 // parseUserTimeRange parses start_date, end_date query parameters for user dashboard
+// Uses user's timezone if provided, otherwise falls back to server timezone
 func parseUserTimeRange(c *gin.Context) (time.Time, time.Time) {
-	now := timezone.Now()
+	userTZ := c.Query("timezone") // Get user's timezone from request
+	now := timezone.NowInUserLocation(userTZ)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
 	var startTime, endTime time.Time
 
 	if startDate != "" {
-		if t, err := timezone.ParseInLocation("2006-01-02", startDate); err == nil {
+		if t, err := timezone.ParseInUserLocation("2006-01-02", startDate, userTZ); err == nil {
 			startTime = t
 		} else {
-			startTime = timezone.StartOfDay(now.AddDate(0, 0, -7))
+			startTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -7), userTZ)
 		}
 	} else {
-		startTime = timezone.StartOfDay(now.AddDate(0, 0, -7))
+		startTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -7), userTZ)
 	}
 
 	if endDate != "" {
-		if t, err := timezone.ParseInLocation("2006-01-02", endDate); err == nil {
+		if t, err := timezone.ParseInUserLocation("2006-01-02", endDate, userTZ); err == nil {
 			endTime = t.Add(24 * time.Hour) // Include the end date
 		} else {
-			endTime = timezone.StartOfDay(now.AddDate(0, 0, 1))
+			endTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, 1), userTZ)
 		}
 	} else {
-		endTime = timezone.StartOfDay(now.AddDate(0, 0, 1))
+		endTime = timezone.StartOfDayInUserLocation(now.AddDate(0, 0, 1), userTZ)
 	}
 
+	return startTime, endTime
+}
+
+const (
+	defaultAPIKeyDailyUsageDays = 30
+	maxAPIKeyDailyUsageDays     = 90
+)
+
+func parseAPIKeyDailyUsageDays(raw string) (int, bool) {
+	if strings.TrimSpace(raw) == "" {
+		return defaultAPIKeyDailyUsageDays, true
+	}
+	days, err := strconv.Atoi(raw)
+	if err != nil || days <= 0 || days > maxAPIKeyDailyUsageDays {
+		return 0, false
+	}
+	return days, true
+}
+
+func apiKeyDailyUsageRange(days int, userTZ string) (time.Time, time.Time) {
+	now := timezone.NowInUserLocation(userTZ)
+	startTime := timezone.StartOfDayInUserLocation(now.AddDate(0, 0, -(days-1)), userTZ)
+	endTime := timezone.StartOfDayInUserLocation(now.AddDate(0, 0, 1), userTZ)
 	return startTime, endTime
 }
 
 // DashboardStats handles getting user dashboard statistics
 // GET /api/v1/usage/dashboard/stats
 func (h *UsageHandler) DashboardStats(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
-	user, ok := userValue.(*model.User)
-	if !ok {
-		response.InternalError(c, "Invalid user context")
-		return
-	}
-
-	stats, err := h.usageRepo.GetUserDashboardStats(c.Request.Context(), user.ID)
+	stats, err := h.usageService.GetUserDashboardStats(c.Request.Context(), subject.UserID)
 	if err != nil {
-		response.InternalError(c, "Failed to get dashboard statistics")
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -272,24 +463,18 @@ func (h *UsageHandler) DashboardStats(c *gin.Context) {
 // DashboardTrend handles getting user usage trend data
 // GET /api/v1/usage/dashboard/trend
 func (h *UsageHandler) DashboardTrend(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	user, ok := userValue.(*model.User)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
-		response.InternalError(c, "Invalid user context")
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	startTime, endTime := parseUserTimeRange(c)
 	granularity := c.DefaultQuery("granularity", "day")
 
-	trend, err := h.usageRepo.GetUserUsageTrendByUserID(c.Request.Context(), user.ID, startTime, endTime, granularity)
+	trend, err := h.usageService.GetUserUsageTrendByUserID(c.Request.Context(), subject.UserID, startTime, endTime, granularity)
 	if err != nil {
-		response.InternalError(c, "Failed to get usage trend")
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -304,23 +489,17 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 // DashboardModels handles getting user model usage statistics
 // GET /api/v1/usage/dashboard/models
 func (h *UsageHandler) DashboardModels(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	user, ok := userValue.(*model.User)
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
-		response.InternalError(c, "Invalid user context")
+		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	startTime, endTime := parseUserTimeRange(c)
 
-	stats, err := h.usageRepo.GetUserModelStats(c.Request.Context(), user.ID, startTime, endTime)
+	stats, err := h.usageService.GetUserModelStats(c.Request.Context(), subject.UserID, startTime, endTime)
 	if err != nil {
-		response.InternalError(c, "Failed to get model statistics")
+		response.ErrorFrom(c, err)
 		return
 	}
 
@@ -331,67 +510,105 @@ func (h *UsageHandler) DashboardModels(c *gin.Context) {
 	})
 }
 
-// BatchApiKeysUsageRequest represents the request for batch API keys usage
-type BatchApiKeysUsageRequest struct {
-	ApiKeyIDs []int64 `json:"api_key_ids" binding:"required"`
+// BatchAPIKeysUsageRequest represents the request for batch API keys usage
+type BatchAPIKeysUsageRequest struct {
+	APIKeyIDs []int64 `json:"api_key_ids" binding:"required"`
 }
 
-// DashboardApiKeysUsage handles getting usage stats for user's own API keys
+// DashboardAPIKeysUsage handles getting usage stats for user's own API keys
 // POST /api/v1/usage/dashboard/api-keys-usage
-func (h *UsageHandler) DashboardApiKeysUsage(c *gin.Context) {
-	userValue, exists := c.Get("user")
-	if !exists {
+func (h *UsageHandler) DashboardAPIKeysUsage(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
-	user, ok := userValue.(*model.User)
-	if !ok {
-		response.InternalError(c, "Invalid user context")
-		return
-	}
-
-	var req BatchApiKeysUsageRequest
+	var req BatchAPIKeysUsageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
 
-	if len(req.ApiKeyIDs) == 0 {
-		response.Success(c, gin.H{"stats": map[string]interface{}{}})
+	if len(req.APIKeyIDs) == 0 {
+		response.Success(c, gin.H{"stats": map[string]any{}})
 		return
 	}
 
-	// Verify ownership of all requested API keys
-	userApiKeys, _, err := h.apiKeyService.List(c.Request.Context(), user.ID, pagination.PaginationParams{Page: 1, PageSize: 1000})
+	// Limit the number of API key IDs to prevent SQL parameter overflow
+	if len(req.APIKeyIDs) > 100 {
+		response.BadRequest(c, "Too many API key IDs (maximum 100 allowed)")
+		return
+	}
+
+	validAPIKeyIDs, err := h.apiKeyService.VerifyOwnership(c.Request.Context(), subject.UserID, req.APIKeyIDs)
 	if err != nil {
-		response.InternalError(c, "Failed to verify API key ownership")
+		response.ErrorFrom(c, err)
 		return
 	}
 
-	userApiKeyIDs := make(map[int64]bool)
-	for _, key := range userApiKeys {
-		userApiKeyIDs[key.ID] = true
-	}
-
-	// Filter to only include user's own API keys
-	validApiKeyIDs := make([]int64, 0)
-	for _, id := range req.ApiKeyIDs {
-		if userApiKeyIDs[id] {
-			validApiKeyIDs = append(validApiKeyIDs, id)
-		}
-	}
-
-	if len(validApiKeyIDs) == 0 {
-		response.Success(c, gin.H{"stats": map[string]interface{}{}})
+	if len(validAPIKeyIDs) == 0 {
+		response.Success(c, gin.H{"stats": map[string]any{}})
 		return
 	}
 
-	stats, err := h.usageRepo.GetBatchApiKeyUsageStats(c.Request.Context(), validApiKeyIDs)
+	stats, err := h.usageService.GetBatchAPIKeyUsageStats(c.Request.Context(), validAPIKeyIDs, time.Time{}, time.Time{})
 	if err != nil {
-		response.InternalError(c, "Failed to get API key usage stats")
+		response.ErrorFrom(c, err)
 		return
 	}
 
 	response.Success(c, gin.H{"stats": stats})
+}
+
+// GetMyAPIKeyDailyUsage handles getting daily usage details for the current user's API key.
+// GET /api/v1/user/api-keys/:id/usage/daily?days=30
+func (h *UsageHandler) GetMyAPIKeyDailyUsage(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	apiKeyID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid API key ID")
+		return
+	}
+
+	days, ok := parseAPIKeyDailyUsageDays(c.DefaultQuery("days", ""))
+	if !ok {
+		response.BadRequest(c, "Invalid days, allowed range is 1-90")
+		return
+	}
+
+	if h.apiKeyService == nil {
+		response.InternalError(c, "API key service is not configured")
+		return
+	}
+
+	apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), apiKeyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if apiKey.UserID != subject.UserID {
+		response.Forbidden(c, "Not authorized to access this API key's usage")
+		return
+	}
+
+	userTZ := c.Query("timezone")
+	startTime, endTime := apiKeyDailyUsageRange(days, userTZ)
+	items, err := h.usageService.GetAPIKeyDailyUsage(c.Request.Context(), subject.UserID, apiKeyID, startTime, endTime)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"items":      items,
+		"days":       days,
+		"start_date": startTime.Format("2006-01-02"),
+		"end_date":   endTime.AddDate(0, 0, -1).Format("2006-01-02"),
+	})
 }

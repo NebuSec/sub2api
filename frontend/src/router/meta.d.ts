@@ -3,7 +3,7 @@
  * Extends the RouteMeta interface with custom properties
  */
 
-import 'vue-router';
+import 'vue-router'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -11,36 +11,58 @@ declare module 'vue-router' {
      * Whether this route requires authentication
      * @default true
      */
-    requiresAuth?: boolean;
+    requiresAuth?: boolean
 
     /**
      * Whether this route requires admin role
      * @default false
      */
-    requiresAdmin?: boolean;
+    requiresAdmin?: boolean
 
     /**
      * Page title for this route
      */
-    title?: string;
+    title?: string
 
     /**
      * Optional breadcrumb items for navigation
      */
     breadcrumbs?: Array<{
-      label: string;
-      to?: string;
-    }>;
+      label: string
+      to?: string
+    }>
 
     /**
      * Icon name for this route (for sidebar navigation)
      */
-    icon?: string;
+    icon?: string
 
     /**
      * Whether to hide this route from navigation menu
      * @default false
      */
-    hideInMenu?: boolean;
+    hideInMenu?: boolean
+
+    /**
+     * Whether this route requires internal payment system to be enabled
+     * @default false
+     */
+    requiresPayment?: boolean
+
+    /**
+     * 是否要求风控中心功能开关已启用
+     * @default false
+     */
+    requiresRiskControl?: boolean
+
+    /**
+     * i18n key for the page title
+     */
+    titleKey?: string
+
+    /**
+     * i18n key for the page description
+     */
+    descriptionKey?: string
   }
 }

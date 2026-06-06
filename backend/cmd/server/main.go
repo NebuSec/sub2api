@@ -15,11 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"sub2api/internal/config"
-	"sub2api/internal/handler"
-	"sub2api/internal/middleware"
-	"sub2api/internal/setup"
-	"sub2api/internal/web"
+	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/setup"
+	"github.com/Wei-Shaw/sub2api/internal/web"
 
 	"github.com/gin-gonic/gin"
 )
@@ -36,14 +38,24 @@ var (
 )
 
 func init() {
-	// Read version from embedded VERSION file
+	// 如果 Version 已通过 ldflags 注入（例如 -X main.Version=...），则不要覆盖。
+	if strings.TrimSpace(Version) != "" {
+		return
+	}
+
+	// 默认从 embedded VERSION 文件读取版本号（编译期打包进二进制）。
 	Version = strings.TrimSpace(embeddedVersion)
 	if Version == "" {
 		Version = "0.0.0-dev"
 	}
 }
 
+// initLogger configures the default slog handler based on gin.Mode().
+// In non-release mode, Debug level logs are enabled.
 func main() {
+	logger.InitBootstrap()
+	defer logger.Sync()
+
 	// Parse command line flags
 	setupMode := flag.Bool("setup", false, "Run setup wizard in CLI mode")
 	showVersion := flag.Bool("version", false, "Show version information")
@@ -84,8 +96,9 @@ func main() {
 
 func runSetupServer() {
 	r := gin.New()
-	r.Use(gin.Recovery())
-	r.Use(middleware.CORS())
+	r.Use(middleware.Recovery())
+	r.Use(middleware.CORS(config.CORSConfig{}))
+	r.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true, Policy: config.DefaultCSPPolicy}, nil))
 
 	// Register setup routes
 	setup.RegisterRoutes(r)
@@ -101,12 +114,35 @@ func runSetupServer() {
 	log.Printf("Setup wizard available at http://%s", addr)
 	log.Println("Complete the setup wizard to configure Sub2API")
 
-	if err := r.Run(addr); err != nil {
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		Protocols:         protocols,
+	}
+
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Failed to start setup server: %v", err)
 	}
 }
 
 func runMainServer() {
+	cfg, err := config.LoadForBootstrap()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := logger.Init(logger.OptionsFromConfig(cfg.Log)); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	if cfg.RunMode == config.RunModeSimple {
+		log.Println("⚠️  WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
+	}
+
 	buildInfo := handler.BuildInfo{
 		Version:   Version,
 		BuildType: BuildType,

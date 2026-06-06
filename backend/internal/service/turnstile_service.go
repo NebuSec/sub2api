@@ -2,14 +2,16 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
 var (
-	ErrTurnstileVerificationFailed = errors.New("turnstile verification failed")
-	ErrTurnstileNotConfigured      = errors.New("turnstile not configured")
+	ErrTurnstileVerificationFailed = infraerrors.BadRequest("TURNSTILE_VERIFICATION_FAILED", "turnstile verification failed")
+	ErrTurnstileNotConfigured      = infraerrors.ServiceUnavailable("TURNSTILE_NOT_CONFIGURED", "turnstile not configured")
+	ErrTurnstileInvalidSecretKey   = infraerrors.BadRequest("TURNSTILE_INVALID_SECRET_KEY", "invalid turnstile secret key")
 )
 
 // TurnstileVerifier 验证 Turnstile token 的接口
@@ -45,40 +47,59 @@ func NewTurnstileService(settingService *SettingService, verifier TurnstileVerif
 func (s *TurnstileService) VerifyToken(ctx context.Context, token string, remoteIP string) error {
 	// 检查是否启用 Turnstile
 	if !s.settingService.IsTurnstileEnabled(ctx) {
-		log.Println("[Turnstile] Disabled, skipping verification")
+		logger.LegacyPrintf("service.turnstile", "%s", "[Turnstile] Disabled, skipping verification")
 		return nil
 	}
 
 	// 获取 Secret Key
 	secretKey := s.settingService.GetTurnstileSecretKey(ctx)
 	if secretKey == "" {
-		log.Println("[Turnstile] Secret key not configured")
+		logger.LegacyPrintf("service.turnstile", "%s", "[Turnstile] Secret key not configured")
 		return ErrTurnstileNotConfigured
 	}
 
 	// 如果 token 为空，返回错误
 	if token == "" {
-		log.Println("[Turnstile] Token is empty")
+		logger.LegacyPrintf("service.turnstile", "%s", "[Turnstile] Token is empty")
 		return ErrTurnstileVerificationFailed
 	}
 
-	log.Printf("[Turnstile] Verifying token for IP: %s", remoteIP)
+	logger.LegacyPrintf("service.turnstile", "[Turnstile] Verifying token for IP: %s", remoteIP)
 	result, err := s.verifier.VerifyToken(ctx, secretKey, token, remoteIP)
 	if err != nil {
-		log.Printf("[Turnstile] Request failed: %v", err)
+		logger.LegacyPrintf("service.turnstile", "[Turnstile] Request failed: %v", err)
 		return fmt.Errorf("send request: %w", err)
 	}
 
 	if !result.Success {
-		log.Printf("[Turnstile] Verification failed, error codes: %v", result.ErrorCodes)
+		logger.LegacyPrintf("service.turnstile", "[Turnstile] Verification failed, error codes: %v", result.ErrorCodes)
 		return ErrTurnstileVerificationFailed
 	}
 
-	log.Println("[Turnstile] Verification successful")
+	logger.LegacyPrintf("service.turnstile", "%s", "[Turnstile] Verification successful")
 	return nil
 }
 
 // IsEnabled 检查 Turnstile 是否启用
 func (s *TurnstileService) IsEnabled(ctx context.Context) bool {
 	return s.settingService.IsTurnstileEnabled(ctx)
+}
+
+// ValidateSecretKey 验证 Turnstile Secret Key 是否有效
+func (s *TurnstileService) ValidateSecretKey(ctx context.Context, secretKey string) error {
+	// 发送一个测试token的验证请求来检查secret_key是否有效
+	result, err := s.verifier.VerifyToken(ctx, secretKey, "test-validation", "")
+	if err != nil {
+		return fmt.Errorf("validate secret key: %w", err)
+	}
+
+	// 检查是否有 invalid-input-secret 错误
+	for _, code := range result.ErrorCodes {
+		if code == "invalid-input-secret" {
+			return ErrTurnstileInvalidSecretKey
+		}
+	}
+
+	// 其他错误（如 invalid-input-response）说明 secret key 是有效的
+	return nil
 }

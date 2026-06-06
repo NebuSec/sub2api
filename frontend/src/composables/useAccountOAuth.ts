@@ -3,7 +3,7 @@ import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 
 export type AddMethod = 'oauth' | 'setup-token'
-export type AuthInputMethod = 'manual' | 'cookie'
+export type AuthInputMethod = 'manual' | 'cookie' | 'refresh_token' | 'mobile_refresh_token' | 'session_token' | 'access_token' | 'codex_session'
 
 export interface OAuthState {
   authUrl: string
@@ -17,6 +17,7 @@ export interface OAuthState {
 export interface TokenInfo {
   org_uuid?: string
   account_uuid?: string
+  email_address?: string
   [key: string]: unknown
 }
 
@@ -53,9 +54,10 @@ export function useAccountOAuth() {
 
     try {
       const proxyConfig = proxyId ? { proxy_id: proxyId } : {}
-      const endpoint = addMethod === 'oauth'
-        ? '/admin/accounts/generate-auth-url'
-        : '/admin/accounts/generate-setup-token-url'
+      const endpoint =
+        addMethod === 'oauth'
+          ? '/admin/accounts/generate-auth-url'
+          : '/admin/accounts/generate-setup-token-url'
 
       const response = await adminAPI.accounts.generateAuthUrl(endpoint, proxyConfig)
       authUrl.value = response.auth_url
@@ -85,9 +87,10 @@ export function useAccountOAuth() {
 
     try {
       const proxyConfig = proxyId ? { proxy_id: proxyId } : {}
-      const endpoint = addMethod === 'oauth'
-        ? '/admin/accounts/exchange-code'
-        : '/admin/accounts/exchange-setup-token-code'
+      const endpoint =
+        addMethod === 'oauth'
+          ? '/admin/accounts/exchange-code'
+          : '/admin/accounts/exchange-setup-token-code'
 
       const tokenInfo = await adminAPI.accounts.exchangeCode(endpoint, {
         session_id: sessionId.value,
@@ -121,9 +124,10 @@ export function useAccountOAuth() {
 
     try {
       const proxyConfig = proxyId ? { proxy_id: proxyId } : {}
-      const endpoint = addMethod === 'oauth'
-        ? '/admin/accounts/cookie-auth'
-        : '/admin/accounts/setup-token-cookie-auth'
+      const endpoint =
+        addMethod === 'oauth'
+          ? '/admin/accounts/cookie-auth'
+          : '/admin/accounts/setup-token-cookie-auth'
 
       const tokenInfo = await adminAPI.accounts.exchangeCode(endpoint, {
         session_id: '',
@@ -142,7 +146,10 @@ export function useAccountOAuth() {
 
   // Parse multiple session keys
   const parseSessionKeys = (input: string): string[] => {
-    return input.split('\n').map(k => k.trim()).filter(k => k)
+    return input
+      .split('\n')
+      .map((k) => k.trim())
+      .filter((k) => k)
   }
 
   // Build extra info from token response
@@ -153,6 +160,9 @@ export function useAccountOAuth() {
     }
     if (tokenInfo.account_uuid) {
       extra.account_uuid = tokenInfo.account_uuid
+    }
+    if (tokenInfo.email_address) {
+      extra.email_address = tokenInfo.email_address
     }
     return Object.keys(extra).length > 0 ? extra : undefined
   }

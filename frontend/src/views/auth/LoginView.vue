@@ -10,7 +10,6 @@
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
-
       <!-- Login Form -->
       <form @submit.prevent="handleLogin" class="space-y-5">
         <!-- Email Input -->
@@ -19,26 +18,22 @@
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400 dark:text-dark-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-              </svg>
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="email"
               v-model="formData.email"
               type="email"
               required
+              autofocus
               autocomplete="email"
-              :disabled="isLoading"
+              :disabled="authActionDisabled"
               class="input pl-11"
               :class="{ 'input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
-          <p v-if="errors.email" class="input-error-text">
-            {{ errors.email }}
-          </p>
         </div>
 
         <!-- Password Input -->
@@ -47,10 +42,8 @@
             {{ t('auth.passwordLabel') }}
           </label>
           <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400 dark:text-dark-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="password"
@@ -58,7 +51,7 @@
               :type="showPassword ? 'text' : 'password'"
               required
               autocomplete="current-password"
-              :disabled="isLoading"
+              :disabled="authActionDisabled"
               class="input pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
               :placeholder="t('auth.passwordPlaceholder')"
@@ -66,20 +59,23 @@
             <button
               type="button"
               @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-dark-300 transition-colors"
+              :disabled="authActionDisabled"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
             >
-              <svg v-if="showPassword" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-              </svg>
-              <svg v-else class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <Icon v-if="showPassword" name="eyeOff" size="md" />
+              <Icon v-else name="eye" size="md" />
             </button>
           </div>
-          <p v-if="errors.password" class="input-error-text">
-            {{ errors.password }}
-          </p>
+          <div class="mt-1 flex items-center justify-between">
+            <span></span>
+            <router-link
+              v-if="passwordResetEnabled && !backendModeEnabled"
+              to="/forgot-password"
+              class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              {{ t('auth.forgotPassword') }}
+            </router-link>
+          </div>
         </div>
 
         <!-- Turnstile Widget -->
@@ -91,226 +87,468 @@
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
           />
-          <p v-if="errors.turnstile" class="input-error-text text-center mt-2">
-            {{ errors.turnstile }}
-          </p>
         </div>
-
-        <!-- Error Message -->
-        <transition name="fade">
-          <div
-            v-if="errorMessage"
-            class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50"
-          >
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <svg class="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                </svg>
-              </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
-                {{ errorMessage }}
-              </p>
-            </div>
-          </div>
-        </transition>
 
         <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="isLoading || (turnstileEnabled && !turnstileToken)"
+          :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
           class="btn btn-primary w-full"
         >
           <svg
             v-if="isLoading"
-            class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
             fill="none"
             viewBox="0 0 24 24"
           >
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
           </svg>
-          <svg v-else class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-          </svg>
+          <Icon v-else name="login" size="md" class="mr-2" />
           {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
+
+        <LoginAgreementPrompt
+          v-if="loginAgreementEnabled"
+          :accepted="agreementAccepted"
+          :documents="loginAgreementDocuments"
+          :mode="loginAgreementMode"
+          :updated-at="loginAgreementUpdatedAt"
+          :visible="showAgreementModal"
+          @accept="acceptLoginAgreement"
+          @reject="rejectLoginAgreement"
+          @open="showAgreementModal = true"
+        />
+
+        <div v-if="showOAuthLogin" class="space-y-3 pt-1">
+          <div class="flex items-center gap-3">
+            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <span class="text-xs text-gray-500 dark:text-dark-400">
+              {{ t('auth.oauthOrContinue') }}
+            </span>
+            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+          </div>
+
+          <EmailOAuthButtons
+            :disabled="authActionDisabled"
+            :github-enabled="githubOAuthEnabled"
+            :google-enabled="googleOAuthEnabled"
+            :show-divider="false"
+          />
+
+          <LinuxDoOAuthSection
+            v-if="linuxdoOAuthEnabled"
+            :disabled="authActionDisabled"
+            :show-divider="false"
+          />
+          <DingTalkOAuthSection
+            v-if="dingtalkOAuthEnabled"
+            :disabled="authActionDisabled"
+            :show-divider="false"
+          />
+          <WechatOAuthSection
+            v-if="wechatOAuthEnabled"
+            :disabled="authActionDisabled"
+            :show-divider="false"
+          />
+          <OidcOAuthSection
+            v-if="oidcOAuthEnabled"
+            :disabled="authActionDisabled"
+            :provider-name="oidcOAuthProviderName"
+            :show-divider="false"
+          />
+        </div>
       </form>
     </div>
 
     <!-- Footer -->
-    <template #footer>
+    <template v-if="!backendModeEnabled" #footer>
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signUp') }}
         </router-link>
       </p>
     </template>
   </AuthLayout>
+
+  <!-- 2FA Modal -->
+  <TotpLoginModal
+    v-if="show2FAModal"
+    ref="totpModalRef"
+    :temp-token="totpTempToken"
+    :user-email-masked="totpUserEmailMasked"
+    @verify="handle2FAVerify"
+    @cancel="handle2FACancel"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useI18n } from 'vue-i18n';
-import { AuthLayout } from '@/components/layout';
-import TurnstileWidget from '@/components/TurnstileWidget.vue';
-import { useAuthStore, useAppStore } from '@/stores';
-import { getPublicSettings } from '@/api/auth';
+import { computed, ref, reactive, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { AuthLayout } from '@/components/layout'
+import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
+import DingTalkOAuthSection from '@/components/auth/DingTalkOAuthSection.vue'
+import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
+import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
+import EmailOAuthButtons from '@/components/auth/EmailOAuthButtons.vue'
+import LoginAgreementPrompt from '@/components/auth/LoginAgreementPrompt.vue'
+import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
+import Icon from '@/components/icons/Icon.vue'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
+import { useAuthStore, useAppStore } from '@/stores'
+import { getPublicSettings, isTotp2FARequired, isWeChatWebOAuthEnabled } from '@/api/auth'
+import type { LoginAgreementDocument, TotpLoginResponse } from '@/types'
+import { extractI18nErrorMessage } from '@/utils/apiError'
+import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
 
-const { t } = useI18n();
+const { t } = useI18n()
+const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
 
 // ==================== Router & Stores ====================
 
-const router = useRouter();
-const authStore = useAuthStore();
-const appStore = useAppStore();
+const router = useRouter()
+const authStore = useAuthStore()
+const appStore = useAppStore()
 
 // ==================== State ====================
 
-const isLoading = ref<boolean>(false);
-const errorMessage = ref<string>('');
-const showPassword = ref<boolean>(false);
+const isLoading = ref<boolean>(false)
+const errorMessage = ref<string>('')
+const showPassword = ref<boolean>(false)
+const publicSettingsLoaded = ref<boolean>(false)
 
 // Public settings
-const turnstileEnabled = ref<boolean>(false);
-const turnstileSiteKey = ref<string>('');
+const turnstileEnabled = ref<boolean>(false)
+const turnstileSiteKey = ref<string>('')
+const linuxdoOAuthEnabled = ref<boolean>(false)
+const dingtalkOAuthEnabled = ref<boolean>(false)
+const wechatOAuthEnabled = ref<boolean>(false)
+const backendModeEnabled = ref<boolean>(false)
+const oidcOAuthEnabled = ref<boolean>(false)
+const oidcOAuthProviderName = ref<string>('OIDC')
+const githubOAuthEnabled = ref<boolean>(false)
+const googleOAuthEnabled = ref<boolean>(false)
+const passwordResetEnabled = ref<boolean>(false)
+const loginAgreementEnabled = ref<boolean>(false)
+const loginAgreementMode = ref<'modal' | 'checkbox' | string>('modal')
+const loginAgreementUpdatedAt = ref<string>('')
+const loginAgreementRevision = ref<string>('')
+const loginAgreementDocuments = ref<LoginAgreementDocument[]>([])
+const agreementAccepted = ref<boolean>(false)
+const showAgreementModal = ref<boolean>(false)
 
 // Turnstile
-const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null);
-const turnstileToken = ref<string>('');
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstileToken = ref<string>('')
+
+// 2FA state
+const show2FAModal = ref<boolean>(false)
+const totpTempToken = ref<string>('')
+const totpUserEmailMasked = ref<string>('')
+const totpModalRef = ref<InstanceType<typeof TotpLoginModal> | null>(null)
 
 const formData = reactive({
   email: '',
-  password: '',
-});
+  password: ''
+})
 
 const errors = reactive({
   email: '',
   password: '',
-  turnstile: '',
-});
+  turnstile: ''
+})
+
+const validationToastMessage = computed(
+  () => errors.email || errors.password || errors.turnstile || ''
+)
+
+const agreementGateActive = computed(
+  () => loginAgreementEnabled.value && !agreementAccepted.value
+)
+
+const authActionDisabled = computed(
+  () => isLoading.value || !publicSettingsLoaded.value || agreementGateActive.value
+)
+
+const showOAuthLogin = computed(
+  () =>
+    !backendModeEnabled.value &&
+    (linuxdoOAuthEnabled.value ||
+      dingtalkOAuthEnabled.value ||
+      wechatOAuthEnabled.value ||
+      oidcOAuthEnabled.value ||
+      githubOAuthEnabled.value ||
+      googleOAuthEnabled.value)
+)
+
+watch(validationToastMessage, (value, previousValue) => {
+  if (value && value !== previousValue) {
+    appStore.showError(value)
+  }
+})
 
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
-  try {
-    const settings = await getPublicSettings();
-    turnstileEnabled.value = settings.turnstile_enabled;
-    turnstileSiteKey.value = settings.turnstile_site_key || '';
-  } catch (error) {
-    console.error('Failed to load public settings:', error);
+  const expiredFlag = sessionStorage.getItem('auth_expired')
+  if (expiredFlag) {
+    sessionStorage.removeItem('auth_expired')
+    const message = t('auth.reloginRequired')
+    errorMessage.value = message
+    appStore.showWarning(message)
   }
-});
+
+  try {
+    const settings = await getPublicSettings()
+    turnstileEnabled.value = settings.turnstile_enabled
+    turnstileSiteKey.value = settings.turnstile_site_key || ''
+    linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
+    dingtalkOAuthEnabled.value = settings.dingtalk_oauth_enabled ?? false
+    wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
+    backendModeEnabled.value = settings.backend_mode_enabled
+    oidcOAuthEnabled.value = settings.oidc_oauth_enabled
+    oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+    githubOAuthEnabled.value = settings.github_oauth_enabled
+    googleOAuthEnabled.value = settings.google_oauth_enabled
+    backendModeEnabled.value = settings.backend_mode_enabled
+    passwordResetEnabled.value = settings.password_reset_enabled
+    applyLoginAgreementSettings(settings)
+  } catch (error) {
+    console.error('Failed to load public settings:', error)
+    loginAgreementEnabled.value = false
+    agreementAccepted.value = true
+  } finally {
+    publicSettingsLoaded.value = true
+  }
+})
+
+// ==================== Login Agreement ====================
+
+function applyLoginAgreementSettings(settings: {
+  login_agreement_enabled?: boolean
+  login_agreement_mode?: string
+  login_agreement_updated_at?: string
+  login_agreement_revision?: string
+  login_agreement_documents?: LoginAgreementDocument[]
+}): void {
+  const documents = Array.isArray(settings.login_agreement_documents)
+    ? settings.login_agreement_documents.filter((doc) => doc.title?.trim())
+    : []
+  loginAgreementDocuments.value = documents
+  loginAgreementEnabled.value = settings.login_agreement_enabled === true && documents.length > 0
+  loginAgreementMode.value = settings.login_agreement_mode === 'checkbox' ? 'checkbox' : 'modal'
+  loginAgreementUpdatedAt.value = settings.login_agreement_updated_at || ''
+  loginAgreementRevision.value =
+    settings.login_agreement_revision ||
+    `${loginAgreementUpdatedAt.value}:${documents.map((doc) => `${doc.id}:${doc.title}`).join('|')}`
+
+  agreementAccepted.value = !loginAgreementEnabled.value || hasAcceptedLoginAgreement(loginAgreementRevision.value)
+  showAgreementModal.value =
+    loginAgreementEnabled.value && !agreementAccepted.value && loginAgreementMode.value !== 'checkbox'
+}
+
+function hasAcceptedLoginAgreement(revision: string): boolean {
+  if (!revision) {
+    return false
+  }
+  try {
+    const raw = localStorage.getItem(LOGIN_AGREEMENT_STORAGE_KEY)
+    if (!raw) {
+      return false
+    }
+    const parsed = JSON.parse(raw) as { revision?: string }
+    return parsed.revision === revision
+  } catch {
+    return false
+  }
+}
+
+function acceptLoginAgreement(): void {
+  if (loginAgreementRevision.value) {
+    localStorage.setItem(
+      LOGIN_AGREEMENT_STORAGE_KEY,
+      JSON.stringify({
+        revision: loginAgreementRevision.value,
+        accepted_at: new Date().toISOString()
+      })
+    )
+  }
+  agreementAccepted.value = true
+  showAgreementModal.value = false
+}
+
+function rejectLoginAgreement(): void {
+  localStorage.removeItem(LOGIN_AGREEMENT_STORAGE_KEY)
+  agreementAccepted.value = false
+  showAgreementModal.value = false
+  appStore.showWarning('未同意最新条款前，无法输入账号密码或使用快捷登录。')
+}
 
 // ==================== Turnstile Handlers ====================
 
 function onTurnstileVerify(token: string): void {
-  turnstileToken.value = token;
-  errors.turnstile = '';
+  turnstileToken.value = token
+  errors.turnstile = ''
 }
 
 function onTurnstileExpire(): void {
-  turnstileToken.value = '';
-  errors.turnstile = 'Verification expired, please try again';
+  turnstileToken.value = ''
+  errors.turnstile = t('auth.turnstileExpired')
 }
 
 function onTurnstileError(): void {
-  turnstileToken.value = '';
-  errors.turnstile = 'Verification failed, please try again';
+  turnstileToken.value = ''
+  errors.turnstile = t('auth.turnstileFailed')
 }
 
 // ==================== Validation ====================
 
 function validateForm(): boolean {
   // Reset errors
-  errors.email = '';
-  errors.password = '';
-  errors.turnstile = '';
+  errors.email = ''
+  errors.password = ''
+  errors.turnstile = ''
 
-  let isValid = true;
+  let isValid = true
+
+  if (agreementGateActive.value) {
+    appStore.showWarning('请先阅读并同意最新条款后再登录。')
+    if (loginAgreementMode.value !== 'checkbox') {
+      showAgreementModal.value = true
+    }
+    return false
+  }
 
   // Email validation
   if (!formData.email.trim()) {
-    errors.email = 'Email is required';
-    isValid = false;
+    errors.email = t('auth.emailRequired')
+    isValid = false
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-    errors.email = 'Please enter a valid email address';
-    isValid = false;
+    errors.email = t('auth.invalidEmail')
+    isValid = false
   }
 
   // Password validation
   if (!formData.password) {
-    errors.password = 'Password is required';
-    isValid = false;
+    errors.password = t('auth.passwordRequired')
+    isValid = false
   } else if (formData.password.length < 6) {
-    errors.password = 'Password must be at least 6 characters';
-    isValid = false;
+    errors.password = t('auth.passwordMinLength')
+    isValid = false
   }
 
   // Turnstile validation
   if (turnstileEnabled.value && !turnstileToken.value) {
-    errors.turnstile = 'Please complete the verification';
-    isValid = false;
+    errors.turnstile = t('auth.completeVerification')
+    isValid = false
   }
 
-  return isValid;
+  return isValid
 }
 
 // ==================== Form Handlers ====================
 
 async function handleLogin(): Promise<void> {
   // Clear previous error
-  errorMessage.value = '';
+  errorMessage.value = ''
 
   // Validate form
   if (!validateForm()) {
-    return;
+    return
   }
 
-  isLoading.value = true;
+  isLoading.value = true
 
   try {
     // Call auth store login
-    await authStore.login({
+    const response = await authStore.login({
       email: formData.email,
       password: formData.password,
-      turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
-    });
+      turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined
+    })
+
+    // Check if 2FA is required
+    if (isTotp2FARequired(response)) {
+      const totpResponse = response as TotpLoginResponse
+      totpTempToken.value = totpResponse.temp_token || ''
+      totpUserEmailMasked.value = totpResponse.user_email_masked || ''
+      show2FAModal.value = true
+      isLoading.value = false
+      return
+    }
 
     // Show success toast
-    appStore.showSuccess('Login successful! Welcome back.');
+    clearAllAffiliateReferralCodes()
+    appStore.showSuccess(t('auth.loginSuccess'))
 
     // Redirect to dashboard or intended route
-    const redirectTo = router.currentRoute.value.query.redirect as string || '/dashboard';
-    await router.push(redirectTo);
+    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    await router.push(redirectTo)
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {
-      turnstileRef.value.reset();
-      turnstileToken.value = '';
+      turnstileRef.value.reset()
+      turnstileToken.value = ''
     }
 
-    // Handle login error
-    const err = error as { message?: string; response?: { data?: { detail?: string } } };
-
-    if (err.response?.data?.detail) {
-      errorMessage.value = err.response.data.detail;
-    } else if (err.message) {
-      errorMessage.value = err.message;
-    } else {
-      errorMessage.value = 'Login failed. Please check your credentials and try again.';
-    }
+    errorMessage.value = extractI18nErrorMessage(error, t, 'auth.errors', t('auth.loginFailed'))
 
     // Also show error toast
-    appStore.showError(errorMessage.value);
+    appStore.showError(errorMessage.value)
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
+}
+
+// ==================== 2FA Handlers ====================
+
+async function handle2FAVerify(code: string): Promise<void> {
+  if (totpModalRef.value) {
+    totpModalRef.value.setVerifying(true)
+  }
+
+  try {
+    await authStore.login2FA(totpTempToken.value, code)
+
+    // Close modal and show success
+    show2FAModal.value = false
+    clearAllAffiliateReferralCodes()
+    appStore.showSuccess(t('auth.loginSuccess'))
+
+    // Redirect to dashboard or intended route
+    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    await router.push(redirectTo)
+  } catch (error: unknown) {
+    const err = error as { message?: string; response?: { data?: { message?: string } } }
+    const message = err.response?.data?.message || err.message || t('profile.totp.loginFailed')
+
+    if (totpModalRef.value) {
+      totpModalRef.value.setError(message)
+      totpModalRef.value.setVerifying(false)
+    }
+  }
+}
+
+function handle2FACancel(): void {
+  show2FAModal.value = false
+  totpTempToken.value = ''
+  totpUserEmailMasked.value = ''
 }
 </script>
 

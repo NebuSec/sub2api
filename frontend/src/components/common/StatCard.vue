@@ -1,33 +1,19 @@
 <template>
   <div class="stat-card">
     <div :class="['stat-icon', iconClass]">
-      <component
-        v-if="icon"
-        :is="icon"
-        class="w-6 h-6"
-        aria-hidden="true"
-      />
+      <component v-if="icon" :is="icon" class="h-6 w-6" aria-hidden="true" />
     </div>
-    <div class="flex-1 min-w-0">
+    <div class="min-w-0 flex-1">
       <p class="stat-label truncate">{{ title }}</p>
-      <div class="flex items-baseline gap-2 mt-1">
-        <p class="stat-value">{{ formattedValue }}</p>
-        <span
-          v-if="change !== undefined"
-          :class="['stat-trend', trendClass]"
-        >
-          <svg
+      <div class="mt-1 flex items-baseline gap-2">
+        <p class="stat-value" :title="String(formattedValue)">{{ formattedValue }}</p>
+        <span v-if="change !== undefined" :class="['stat-trend', trendClass]">
+          <Icon
             v-if="changeType !== 'neutral'"
-            :class="['w-3 h-3', changeType === 'down' && 'rotate-180']"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fill-rule="evenodd"
-              d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z"
-              clip-rule="evenodd"
-            />
-          </svg>
+            name="arrowUp"
+            size="xs"
+            :class="changeType === 'down' && 'rotate-180'"
+          />
           {{ formattedChange }}
         </span>
       </div>
@@ -38,6 +24,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Component } from 'vue'
+import Icon from '@/components/icons/Icon.vue'
 
 type ChangeType = 'up' | 'down' | 'neutral'
 type IconVariant = 'primary' | 'success' | 'warning' | 'danger'

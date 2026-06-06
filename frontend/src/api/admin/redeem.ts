@@ -3,13 +3,14 @@
  * Handles redeem code generation and management for administrators
  */
 
-import { apiClient } from '../client';
+import { apiClient } from '../client'
 import type {
   RedeemCode,
   GenerateRedeemCodesRequest,
+  BatchUpdateRedeemCodeFields,
   RedeemCodeType,
-  PaginatedResponse,
-} from '@/types';
+  PaginatedResponse
+} from '@/types'
 
 /**
  * List all redeem codes with pagination
@@ -22,19 +23,25 @@ export async function list(
   page: number = 1,
   pageSize: number = 20,
   filters?: {
-    type?: RedeemCodeType;
-    status?: 'active' | 'used' | 'expired' | 'unused';
-    search?: string;
+    type?: RedeemCodeType
+    status?: 'active' | 'used' | 'expired' | 'unused' | 'disabled'
+    search?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
+  },
+  options?: {
+    signal?: AbortSignal
   }
 ): Promise<PaginatedResponse<RedeemCode>> {
   const { data } = await apiClient.get<PaginatedResponse<RedeemCode>>('/admin/redeem-codes', {
     params: {
       page,
       page_size: pageSize,
-      ...filters,
+      ...filters
     },
-  });
-  return data;
+    signal: options?.signal
+  })
+  return data
 }
 
 /**
@@ -43,8 +50,8 @@ export async function list(
  * @returns Redeem code details
  */
 export async function getById(id: number): Promise<RedeemCode> {
-  const { data } = await apiClient.get<RedeemCode>(`/admin/redeem-codes/${id}`);
-  return data;
+  const { data } = await apiClient.get<RedeemCode>(`/admin/redeem-codes/${id}`)
+  return data
 }
 
 /**
@@ -54,6 +61,7 @@ export async function getById(id: number): Promise<RedeemCode> {
  * @param value - Value of the code
  * @param groupId - Group ID (required for subscription type)
  * @param validityDays - Validity days (for subscription type)
+ * @param expiresInDays - Days before the code itself expires
  * @returns Array of generated redeem codes
  */
 export async function generate(
@@ -61,24 +69,28 @@ export async function generate(
   type: RedeemCodeType,
   value: number,
   groupId?: number | null,
-  validityDays?: number
+  validityDays?: number,
+  expiresInDays?: number | null
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value,
-  };
+    value
+  }
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    payload.group_id = groupId;
+    payload.group_id = groupId
     if (validityDays && validityDays > 0) {
-      payload.validity_days = validityDays;
+      payload.validity_days = validityDays
     }
   }
+  if (expiresInDays && expiresInDays > 0) {
+    payload.expires_in_days = expiresInDays
+  }
 
-  const { data } = await apiClient.post<RedeemCode[]>('/admin/redeem-codes/generate', payload);
-  return data;
+  const { data } = await apiClient.post<RedeemCode[]>('/admin/redeem-codes/generate', payload)
+  return data
 }
 
 /**
@@ -87,8 +99,8 @@ export async function generate(
  * @returns Success confirmation
  */
 export async function deleteCode(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.delete<{ message: string }>(`/admin/redeem-codes/${id}`);
-  return data;
+  const { data } = await apiClient.delete<{ message: string }>(`/admin/redeem-codes/${id}`)
+  return data
 }
 
 /**
@@ -97,14 +109,34 @@ export async function deleteCode(id: number): Promise<{ message: string }> {
  * @returns Success confirmation
  */
 export async function batchDelete(ids: number[]): Promise<{
-  deleted: number;
-  message: string;
+  deleted: number
+  message: string
 }> {
   const { data } = await apiClient.post<{
-    deleted: number;
-    message: string;
-  }>('/admin/redeem-codes/batch-delete', { ids });
-  return data;
+    deleted: number
+    message: string
+  }>('/admin/redeem-codes/batch-delete', { ids })
+  return data
+}
+
+/**
+ * Batch update selected redeem code fields
+ * @param ids - Array of redeem code IDs
+ * @param fields - Field collection to update
+ * @returns Updated count
+ */
+export async function batchUpdate(
+  ids: number[],
+  fields: BatchUpdateRedeemCodeFields
+): Promise<{
+  updated: number
+  message: string
+}> {
+  const { data } = await apiClient.post<{
+    updated: number
+    message: string
+  }>('/admin/redeem-codes/batch-update', { ids, fields })
+  return data
 }
 
 /**
@@ -113,8 +145,8 @@ export async function batchDelete(ids: number[]): Promise<{
  * @returns Updated redeem code
  */
 export async function expire(id: number): Promise<RedeemCode> {
-  const { data } = await apiClient.post<RedeemCode>(`/admin/redeem-codes/${id}/expire`);
-  return data;
+  const { data } = await apiClient.post<RedeemCode>(`/admin/redeem-codes/${id}/expire`)
+  return data
 }
 
 /**
@@ -122,22 +154,22 @@ export async function expire(id: number): Promise<RedeemCode> {
  * @returns Statistics about redeem codes
  */
 export async function getStats(): Promise<{
-  total_codes: number;
-  active_codes: number;
-  used_codes: number;
-  expired_codes: number;
-  total_value_distributed: number;
-  by_type: Record<RedeemCodeType, number>;
+  total_codes: number
+  active_codes: number
+  used_codes: number
+  expired_codes: number
+  total_value_distributed: number
+  by_type: Record<RedeemCodeType, number>
 }> {
   const { data } = await apiClient.get<{
-    total_codes: number;
-    active_codes: number;
-    used_codes: number;
-    expired_codes: number;
-    total_value_distributed: number;
-    by_type: Record<RedeemCodeType, number>;
-  }>('/admin/redeem-codes/stats');
-  return data;
+    total_codes: number
+    active_codes: number
+    used_codes: number
+    expired_codes: number
+    total_value_distributed: number
+    by_type: Record<RedeemCodeType, number>
+  }>('/admin/redeem-codes/stats')
+  return data
 }
 
 /**
@@ -146,14 +178,17 @@ export async function getStats(): Promise<{
  * @returns CSV data as blob
  */
 export async function exportCodes(filters?: {
-  type?: RedeemCodeType;
-  status?: 'active' | 'used' | 'expired';
+  type?: RedeemCodeType
+  status?: 'used' | 'expired' | 'unused' | 'disabled'
+  search?: string
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
 }): Promise<Blob> {
   const response = await apiClient.get('/admin/redeem-codes/export', {
     params: filters,
-    responseType: 'blob',
-  });
-  return response.data;
+    responseType: 'blob'
+  })
+  return response.data
 }
 
 export const redeemAPI = {
@@ -162,9 +197,10 @@ export const redeemAPI = {
   generate,
   delete: deleteCode,
   batchDelete,
+  batchUpdate,
   expire,
   getStats,
-  exportCodes,
-};
+  exportCodes
+}
 
-export default redeemAPI;
+export default redeemAPI

@@ -6,28 +6,34 @@ import (
 	"log"
 	"time"
 
-	"sub2api/internal/model"
-	"sub2api/internal/pkg/oauth"
-	"sub2api/internal/service/ports"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
+
+// OpenAIOAuthClient interface for OpenAI OAuth operations
+type OpenAIOAuthClient interface {
+	ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI, proxyURL, clientID string) (*openai.TokenResponse, error)
+	RefreshToken(ctx context.Context, refreshToken, proxyURL string) (*openai.TokenResponse, error)
+	RefreshTokenWithClientID(ctx context.Context, refreshToken, proxyURL string, clientID string) (*openai.TokenResponse, error)
+}
 
 // ClaudeOAuthClient handles HTTP requests for Claude OAuth flows
 type ClaudeOAuthClient interface {
 	GetOrganizationUUID(ctx context.Context, sessionKey, proxyURL string) (string, error)
 	GetAuthorizationCode(ctx context.Context, sessionKey, orgUUID, scope, codeChallenge, state, proxyURL string) (string, error)
-	ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string) (*oauth.TokenResponse, error)
+	ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool) (*oauth.TokenResponse, error)
 	RefreshToken(ctx context.Context, refreshToken, proxyURL string) (*oauth.TokenResponse, error)
 }
 
 // OAuthService handles OAuth authentication flows
 type OAuthService struct {
 	sessionStore *oauth.SessionStore
-	proxyRepo    ports.ProxyRepository
+	proxyRepo    ProxyRepository
 	oauthClient  ClaudeOAuthClient
 }
 
 // NewOAuthService creates a new OAuth service
-func NewOAuthService(proxyRepo ports.ProxyRepository, oauthClient ClaudeOAuthClient) *OAuthService {
+func NewOAuthService(proxyRepo ProxyRepository, oauthClient ClaudeOAuthClient) *OAuthService {
 	return &OAuthService{
 		sessionStore: oauth.NewSessionStore(),
 		proxyRepo:    proxyRepo,
@@ -43,8 +49,7 @@ type GenerateAuthURLResult struct {
 
 // GenerateAuthURL generates an OAuth authorization URL with full scope
 func (s *OAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64) (*GenerateAuthURLResult, error) {
-	scope := fmt.Sprintf("%s %s", oauth.ScopeProfile, oauth.ScopeInference)
-	return s.generateAuthURLWithScope(ctx, scope, proxyID)
+	return s.generateAuthURLWithScope(ctx, oauth.ScopeOAuth, proxyID)
 }
 
 // GenerateSetupTokenURL generates an OAuth authorization URL for setup token (inference only)
@@ -118,6 +123,7 @@ type TokenInfo struct {
 	Scope        string `json:"scope,omitempty"`
 	OrgUUID      string `json:"org_uuid,omitempty"`
 	AccountUUID  string `json:"account_uuid,omitempty"`
+	EmailAddress string `json:"email_address,omitempty"`
 }
 
 // ExchangeCode exchanges authorization code for tokens
@@ -137,8 +143,11 @@ func (s *OAuthService) ExchangeCode(ctx context.Context, input *ExchangeCodeInpu
 		}
 	}
 
+	// Determine if this is a setup token (scope is inference only)
+	isSetupToken := session.Scope == oauth.ScopeInference
+
 	// Exchange code for token
-	tokenInfo, err := s.exchangeCodeForToken(ctx, input.Code, session.CodeVerifier, session.State, proxyURL)
+	tokenInfo, err := s.exchangeCodeForToken(ctx, input.Code, session.CodeVerifier, session.State, proxyURL, isSetupToken)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +176,13 @@ func (s *OAuthService) CookieAuth(ctx context.Context, input *CookieAuthInput) (
 		}
 	}
 
-	// Determine scope
-	scope := fmt.Sprintf("%s %s", oauth.ScopeProfile, oauth.ScopeInference)
+	// Determine scope and if this is a setup token
+	// Internal API call uses ScopeAPI (org:create_api_key not supported)
+	scope := oauth.ScopeAPI
+	isSetupToken := false
 	if input.Scope == "inference" {
 		scope = oauth.ScopeInference
+		isSetupToken = true
 	}
 
 	// Step 1: Get organization info using sessionKey
@@ -198,7 +210,7 @@ func (s *OAuthService) CookieAuth(ctx context.Context, input *CookieAuthInput) (
 	}
 
 	// Step 4: Exchange code for token
-	tokenInfo, err := s.exchangeCodeForToken(ctx, authCode, codeVerifier, state, proxyURL)
+	tokenInfo, err := s.exchangeCodeForToken(ctx, authCode, codeVerifier, state, proxyURL, isSetupToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
@@ -206,7 +218,7 @@ func (s *OAuthService) CookieAuth(ctx context.Context, input *CookieAuthInput) (
 	// Ensure org_uuid is set (from step 1 if not from token response)
 	if tokenInfo.OrgUUID == "" && orgUUID != "" {
 		tokenInfo.OrgUUID = orgUUID
-		log.Printf("[OAuth] Set org_uuid from cookie auth: %s", orgUUID)
+		log.Printf("[OAuth] Set org_uuid from cookie auth")
 	}
 
 	return tokenInfo, nil
@@ -223,8 +235,8 @@ func (s *OAuthService) getAuthorizationCode(ctx context.Context, sessionKey, org
 }
 
 // exchangeCodeForToken exchanges authorization code for tokens
-func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string) (*TokenInfo, error) {
-	tokenResp, err := s.oauthClient.ExchangeCodeForToken(ctx, code, codeVerifier, state, proxyURL)
+func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool) (*TokenInfo, error) {
+	tokenResp, err := s.oauthClient.ExchangeCodeForToken(ctx, code, codeVerifier, state, proxyURL, isSetupToken)
 	if err != nil {
 		return nil, err
 	}
@@ -240,11 +252,17 @@ func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerif
 
 	if tokenResp.Organization != nil && tokenResp.Organization.UUID != "" {
 		tokenInfo.OrgUUID = tokenResp.Organization.UUID
-		log.Printf("[OAuth] Got org_uuid: %s", tokenInfo.OrgUUID)
+		log.Printf("[OAuth] Got org_uuid")
 	}
-	if tokenResp.Account != nil && tokenResp.Account.UUID != "" {
-		tokenInfo.AccountUUID = tokenResp.Account.UUID
-		log.Printf("[OAuth] Got account_uuid: %s", tokenInfo.AccountUUID)
+	if tokenResp.Account != nil {
+		if tokenResp.Account.UUID != "" {
+			tokenInfo.AccountUUID = tokenResp.Account.UUID
+			log.Printf("[OAuth] Got account_uuid")
+		}
+		if tokenResp.Account.EmailAddress != "" {
+			tokenInfo.EmailAddress = tokenResp.Account.EmailAddress
+			log.Printf("[OAuth] Got email_address")
+		}
 	}
 
 	return tokenInfo, nil
@@ -268,7 +286,7 @@ func (s *OAuthService) RefreshToken(ctx context.Context, refreshToken string, pr
 }
 
 // RefreshAccountToken refreshes token for an account
-func (s *OAuthService) RefreshAccountToken(ctx context.Context, account *model.Account) (*TokenInfo, error) {
+func (s *OAuthService) RefreshAccountToken(ctx context.Context, account *Account) (*TokenInfo, error) {
 	refreshToken := account.GetCredential("refresh_token")
 	if refreshToken == "" {
 		return nil, fmt.Errorf("no refresh token available")
@@ -283,4 +301,9 @@ func (s *OAuthService) RefreshAccountToken(ctx context.Context, account *model.A
 	}
 
 	return s.RefreshToken(ctx, refreshToken, proxyURL)
+}
+
+// Stop stops the session store cleanup goroutine
+func (s *OAuthService) Stop() {
+	s.sessionStore.Stop()
 }

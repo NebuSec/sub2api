@@ -4,32 +4,48 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
-	"sub2api/internal/pkg/oauth"
-	"sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 
 	"github.com/imroc/req/v3"
 )
 
-type claudeOAuthService struct{}
-
 func NewClaudeOAuthClient() service.ClaudeOAuthClient {
-	return &claudeOAuthService{}
+	return &claudeOAuthService{
+		baseURL:       "https://claude.ai",
+		tokenURL:      oauth.TokenURL,
+		clientFactory: createReqClient,
+	}
+}
+
+type claudeOAuthService struct {
+	baseURL       string
+	tokenURL      string
+	clientFactory func(proxyURL string) (*req.Client, error)
 }
 
 func (s *claudeOAuthService) GetOrganizationUUID(ctx context.Context, sessionKey, proxyURL string) (string, error) {
-	client := createReqClient(proxyURL)
-
-	var orgs []struct {
-		UUID string `json:"uuid"`
+	client, err := s.clientFactory(proxyURL)
+	if err != nil {
+		return "", fmt.Errorf("create HTTP client: %w", err)
 	}
 
-	targetURL := "https://claude.ai/api/organizations"
-	log.Printf("[OAuth] Step 1: Getting organization UUID from %s", targetURL)
+	var orgs []struct {
+		UUID      string  `json:"uuid"`
+		Name      string  `json:"name"`
+		RavenType *string `json:"raven_type"` // nil for personal, "team" for team organization
+	}
+
+	targetURL := s.baseURL + "/api/organizations"
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1: Getting organization UUID from %s", targetURL)
 
 	resp, err := client.R().
 		SetContext(ctx).
@@ -41,11 +57,11 @@ func (s *claudeOAuthService) GetOrganizationUUID(ctx context.Context, sessionKey
 		Get(targetURL)
 
 	if err != nil {
-		log.Printf("[OAuth] Step 1 FAILED - Request error: %v", err)
+		logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1 FAILED - Request error: %v", err)
 		return "", fmt.Errorf("request failed: %w", err)
 	}
 
-	log.Printf("[OAuth] Step 1 Response - Status: %d, Body: %s", resp.StatusCode, resp.String())
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1 Response - Status: %d", resp.StatusCode)
 
 	if !resp.IsSuccessState() {
 		return "", fmt.Errorf("failed to get organizations: status %d, body: %s", resp.StatusCode, resp.String())
@@ -55,16 +71,35 @@ func (s *claudeOAuthService) GetOrganizationUUID(ctx context.Context, sessionKey
 		return "", fmt.Errorf("no organizations found")
 	}
 
-	log.Printf("[OAuth] Step 1 SUCCESS - Got org UUID: %s", orgs[0].UUID)
+	// 如果只有一个组织，直接使用
+	if len(orgs) == 1 {
+		logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1 SUCCESS - Single org found, UUID: %s, Name: %s", orgs[0].UUID, orgs[0].Name)
+		return orgs[0].UUID, nil
+	}
+
+	// 如果有多个组织，优先选择 raven_type 为 "team" 的组织
+	for _, org := range orgs {
+		if org.RavenType != nil && *org.RavenType == "team" {
+			logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1 SUCCESS - Selected team org, UUID: %s, Name: %s, RavenType: %s",
+				org.UUID, org.Name, *org.RavenType)
+			return org.UUID, nil
+		}
+	}
+
+	// 如果没有 team 类型的组织，使用第一个
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 1 SUCCESS - No team org found, using first org, UUID: %s, Name: %s", orgs[0].UUID, orgs[0].Name)
 	return orgs[0].UUID, nil
 }
 
 func (s *claudeOAuthService) GetAuthorizationCode(ctx context.Context, sessionKey, orgUUID, scope, codeChallenge, state, proxyURL string) (string, error) {
-	client := createReqClient(proxyURL)
+	client, err := s.clientFactory(proxyURL)
+	if err != nil {
+		return "", fmt.Errorf("create HTTP client: %w", err)
+	}
 
-	authURL := fmt.Sprintf("https://claude.ai/v1/oauth/%s/authorize", orgUUID)
+	authURL := fmt.Sprintf("%s/v1/oauth/%s/authorize", s.baseURL, orgUUID)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"response_type":         "code",
 		"client_id":             oauth.ClientID,
 		"organization_uuid":     orgUUID,
@@ -75,9 +110,9 @@ func (s *claudeOAuthService) GetAuthorizationCode(ctx context.Context, sessionKe
 		"code_challenge_method": "S256",
 	}
 
-	reqBodyJSON, _ := json.Marshal(reqBody)
-	log.Printf("[OAuth] Step 2: Getting authorization code from %s", authURL)
-	log.Printf("[OAuth] Step 2 Request Body: %s", string(reqBodyJSON))
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 2: Getting authorization code from %s", authURL)
+	reqBodyJSON, _ := json.Marshal(logredact.RedactMap(reqBody))
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 2 Request Body: %s", string(reqBodyJSON))
 
 	var result struct {
 		RedirectURI string `json:"redirect_uri"`
@@ -100,11 +135,11 @@ func (s *claudeOAuthService) GetAuthorizationCode(ctx context.Context, sessionKe
 		Post(authURL)
 
 	if err != nil {
-		log.Printf("[OAuth] Step 2 FAILED - Request error: %v", err)
+		logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 2 FAILED - Request error: %v", err)
 		return "", fmt.Errorf("request failed: %w", err)
 	}
 
-	log.Printf("[OAuth] Step 2 Response - Status: %d, Body: %s", resp.StatusCode, resp.String())
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 2 Response - Status: %d, Body: %s", resp.StatusCode, logredact.RedactJSON(resp.Bytes()))
 
 	if !resp.IsSuccessState() {
 		return "", fmt.Errorf("failed to get authorization code: status %d, body: %s", resp.StatusCode, resp.String())
@@ -132,30 +167,25 @@ func (s *claudeOAuthService) GetAuthorizationCode(ctx context.Context, sessionKe
 		fullCode = authCode + "#" + responseState
 	}
 
-	log.Printf("[OAuth] Step 2 SUCCESS - Got authorization code: %s...", authCode[:20])
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 2 SUCCESS - Got authorization code")
 	return fullCode, nil
 }
 
-func (s *claudeOAuthService) ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string) (*oauth.TokenResponse, error) {
-	client := createReqClient(proxyURL)
-
-	authCode := code
-	codeState := ""
-	if len(code) > 0 {
-		parts := make([]string, 0, 2)
-		for i, part := range []rune(code) {
-			if part == '#' {
-				authCode = code[:i]
-				codeState = code[i+1:]
-				break
-			}
-		}
-		if len(parts) == 0 {
-			authCode = code
-		}
+func (s *claudeOAuthService) ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool) (*oauth.TokenResponse, error) {
+	client, err := s.clientFactory(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP client: %w", err)
 	}
 
-	reqBody := map[string]interface{}{
+	// Parse code which may contain state in format "authCode#state"
+	authCode := code
+	codeState := ""
+	if idx := strings.Index(code, "#"); idx != -1 {
+		authCode = code[:idx]
+		codeState = code[idx+1:]
+	}
+
+	reqBody := map[string]any{
 		"code":          authCode,
 		"grant_type":    "authorization_code",
 		"client_id":     oauth.ClientID,
@@ -167,49 +197,63 @@ func (s *claudeOAuthService) ExchangeCodeForToken(ctx context.Context, code, cod
 		reqBody["state"] = codeState
 	}
 
-	reqBodyJSON, _ := json.Marshal(reqBody)
-	log.Printf("[OAuth] Step 3: Exchanging code for token at %s", oauth.TokenURL)
-	log.Printf("[OAuth] Step 3 Request Body: %s", string(reqBodyJSON))
+	// Setup token requires longer expiration (1 year)
+	if isSetupToken {
+		reqBody["expires_in"] = 31536000 // 365 * 24 * 60 * 60 seconds
+	}
+
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3: Exchanging code for token at %s", s.tokenURL)
+	reqBodyJSON, _ := json.Marshal(logredact.RedactMap(reqBody))
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3 Request Body: %s", string(reqBodyJSON))
 
 	var tokenResp oauth.TokenResponse
 
 	resp, err := client.R().
 		SetContext(ctx).
+		SetHeader("Accept", "application/json, text/plain, */*").
 		SetHeader("Content-Type", "application/json").
+		SetHeader("User-Agent", "axios/1.13.6").
 		SetBody(reqBody).
 		SetSuccessResult(&tokenResp).
-		Post(oauth.TokenURL)
+		Post(s.tokenURL)
 
 	if err != nil {
-		log.Printf("[OAuth] Step 3 FAILED - Request error: %v", err)
+		logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3 FAILED - Request error: %v", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	log.Printf("[OAuth] Step 3 Response - Status: %d, Body: %s", resp.StatusCode, resp.String())
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3 Response - Status: %d, Body: %s", resp.StatusCode, logredact.RedactJSON(resp.Bytes()))
 
 	if !resp.IsSuccessState() {
 		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
-	log.Printf("[OAuth] Step 3 SUCCESS - Got access token")
+	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3 SUCCESS - Got access token")
 	return &tokenResp, nil
 }
 
 func (s *claudeOAuthService) RefreshToken(ctx context.Context, refreshToken, proxyURL string) (*oauth.TokenResponse, error) {
-	client := createReqClient(proxyURL)
+	client, err := s.clientFactory(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP client: %w", err)
+	}
 
-	formData := url.Values{}
-	formData.Set("grant_type", "refresh_token")
-	formData.Set("refresh_token", refreshToken)
-	formData.Set("client_id", oauth.ClientID)
+	reqBody := map[string]any{
+		"grant_type":    "refresh_token",
+		"refresh_token": refreshToken,
+		"client_id":     oauth.ClientID,
+	}
 
 	var tokenResp oauth.TokenResponse
 
 	resp, err := client.R().
 		SetContext(ctx).
-		SetFormDataFromValues(formData).
+		SetHeader("Accept", "application/json, text/plain, */*").
+		SetHeader("Content-Type", "application/json").
+		SetHeader("User-Agent", "axios/1.13.6").
+		SetBody(reqBody).
 		SetSuccessResult(&tokenResp).
-		Post(oauth.TokenURL)
+		Post(s.tokenURL)
 
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -222,14 +266,20 @@ func (s *claudeOAuthService) RefreshToken(ctx context.Context, refreshToken, pro
 	return &tokenResp, nil
 }
 
-func createReqClient(proxyURL string) *req.Client {
+func createReqClient(proxyURL string) (*req.Client, error) {
+	// 禁用 CookieJar，确保每次授权都是干净的会话
 	client := req.C().
+		SetTimeout(60 * time.Second).
 		ImpersonateChrome().
-		SetTimeout(60 * time.Second)
+		SetCookieJar(nil) // 禁用 CookieJar
 
-	if proxyURL != "" {
-		client.SetProxyURL(proxyURL)
+	trimmed, _, err := proxyurl.Parse(proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	if trimmed != "" {
+		client.SetProxyURL(trimmed)
 	}
 
-	return client
+	return client, nil
 }

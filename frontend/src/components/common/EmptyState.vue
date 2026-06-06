@@ -1,17 +1,14 @@
 <template>
   <div class="empty-state">
     <!-- Icon -->
-    <div class="w-20 h-20 mb-5 rounded-2xl bg-gray-100 dark:bg-dark-800 flex items-center justify-center">
+    <div
+      class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 dark:bg-dark-800"
+    >
       <slot name="icon">
-        <component
-          v-if="icon"
-          :is="icon"
-          class="empty-state-icon w-10 h-10"
-          aria-hidden="true"
-        />
+        <component v-if="icon" :is="icon" class="empty-state-icon h-10 w-10" aria-hidden="true" />
         <svg
           v-else
-          class="empty-state-icon w-10 h-10"
+          class="empty-state-icon h-10 w-10"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -28,7 +25,7 @@
 
     <!-- Title -->
     <h3 class="empty-state-title">
-      {{ title }}
+      {{ displayTitle }}
     </h3>
 
     <!-- Description -->
@@ -46,20 +43,7 @@
           @click="!actionTo && $emit('action')"
           class="btn btn-primary"
         >
-          <svg
-            v-if="actionIcon"
-            class="w-5 h-5 mr-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M12 4.5v15m7.5-7.5h-15"
-            />
-          </svg>
+          <Icon v-if="actionIcon" name="plus" size="md" class="mr-2" />
           {{ actionText }}
         </component>
       </slot>
@@ -68,7 +52,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Component } from 'vue'
+import Icon from '@/components/icons/Icon.vue'
+
+const { t } = useI18n()
 
 interface Props {
   icon?: Component | string
@@ -80,11 +69,12 @@ interface Props {
   message?: string
 }
 
-withDefaults(defineProps<Props>(), {
-  title: 'No data found',
+const props = withDefaults(defineProps<Props>(), {
   description: '',
   actionIcon: true
 })
+
+const displayTitle = computed(() => props.title || t('common.noData'))
 
 defineEmits(['action'])
 </script>

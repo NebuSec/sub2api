@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"sub2api/internal/pkg/response"
-	"sub2api/internal/pkg/sysutil"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -176,10 +176,11 @@ func testDatabase(c *gin.Context) {
 
 // TestRedisRequest represents Redis test request
 type TestRedisRequest struct {
-	Host     string `json:"host" binding:"required"`
-	Port     int    `json:"port" binding:"required"`
-	Password string `json:"password"`
-	DB       int    `json:"db"`
+	Host      string `json:"host" binding:"required"`
+	Port      int    `json:"port" binding:"required"`
+	Password  string `json:"password"`
+	DB        int    `json:"db"`
+	EnableTLS bool   `json:"enable_tls"`
 }
 
 // testRedis tests Redis connection
@@ -205,10 +206,11 @@ func testRedis(c *gin.Context) {
 	}
 
 	cfg := &RedisConfig{
-		Host:     req.Host,
-		Port:     req.Port,
-		Password: req.Password,
-		DB:       req.DB,
+		Host:      req.Host,
+		Port:      req.Port,
+		Password:  req.Password,
+		DB:        req.DB,
+		EnableTLS: req.EnableTLS,
 	}
 
 	if err := TestRedisConnection(cfg); err != nil {
@@ -244,6 +246,12 @@ func install(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
 	}
+
+	req.Admin.Email = strings.TrimSpace(req.Admin.Email)
+	req.Database.Host = strings.TrimSpace(req.Database.Host)
+	req.Database.User = strings.TrimSpace(req.Database.User)
+	req.Database.DBName = strings.TrimSpace(req.Database.DBName)
+	req.Redis.Host = strings.TrimSpace(req.Redis.Host)
 
 	// ========== COMPREHENSIVE INPUT VALIDATION ==========
 	// Database validation
@@ -316,13 +324,6 @@ func install(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Invalid server mode (must be 'release' or 'debug')")
 		return
 	}
-
-	// Trim whitespace from string inputs
-	req.Admin.Email = strings.TrimSpace(req.Admin.Email)
-	req.Database.Host = strings.TrimSpace(req.Database.Host)
-	req.Database.User = strings.TrimSpace(req.Database.User)
-	req.Database.DBName = strings.TrimSpace(req.Database.DBName)
-	req.Redis.Host = strings.TrimSpace(req.Redis.Host)
 
 	cfg := &SetupConfig{
 		Database: req.Database,

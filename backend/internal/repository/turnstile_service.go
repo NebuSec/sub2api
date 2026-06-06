@@ -9,20 +9,28 @@ import (
 	"strings"
 	"time"
 
-	"sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
 const turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 type turnstileVerifier struct {
 	httpClient *http.Client
+	verifyURL  string
 }
 
 func NewTurnstileVerifier() service.TurnstileVerifier {
+	sharedClient, err := httpclient.GetClient(httpclient.Options{
+		Timeout:            10 * time.Second,
+		ValidateResolvedIP: true,
+	})
+	if err != nil {
+		sharedClient = &http.Client{Timeout: 10 * time.Second}
+	}
 	return &turnstileVerifier{
-		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		httpClient: sharedClient,
+		verifyURL:  turnstileVerifyURL,
 	}
 }
 
@@ -34,7 +42,7 @@ func (v *turnstileVerifier) VerifyToken(ctx context.Context, secretKey, token, r
 		formData.Set("remoteip", remoteIP)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, turnstileVerifyURL, strings.NewReader(formData.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.verifyURL, strings.NewReader(formData.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

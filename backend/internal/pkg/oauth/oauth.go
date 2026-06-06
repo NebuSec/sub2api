@@ -1,3 +1,4 @@
+// Package oauth provides helpers for OAuth flows used by this service.
 package oauth
 
 import (
@@ -12,18 +13,21 @@ import (
 	"time"
 )
 
-// Claude OAuth Constants (from CRS project)
+// Claude OAuth Constants
 const (
 	// OAuth Client ID for Claude
 	ClientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
 	// OAuth endpoints
 	AuthorizeURL = "https://claude.ai/oauth/authorize"
-	TokenURL     = "https://console.anthropic.com/v1/oauth/token"
-	RedirectURI  = "https://console.anthropic.com/oauth/code/callback"
+	TokenURL     = "https://platform.claude.com/v1/oauth/token"
+	RedirectURI  = "https://platform.claude.com/oauth/code/callback"
 
-	// Scopes
-	ScopeProfile   = "user:profile"
+	// Scopes - Browser URL (includes org:create_api_key for user authorization)
+	ScopeOAuth = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+	// Scopes - Internal API call (org:create_api_key not supported in API)
+	ScopeAPI = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+	// Scopes - Setup token (inference only)
 	ScopeInference = "user:inference"
 
 	// Session TTL
@@ -31,6 +35,7 @@ const (
 )
 
 // OAuthSession stores OAuth flow state
+
 type OAuthSession struct {
 	State        string    `json:"state"`
 	CodeVerifier string    `json:"code_verifier"`
@@ -43,16 +48,25 @@ type OAuthSession struct {
 type SessionStore struct {
 	mu       sync.RWMutex
 	sessions map[string]*OAuthSession
+	stopOnce sync.Once
+	stopCh   chan struct{}
 }
 
 // NewSessionStore creates a new session store
 func NewSessionStore() *SessionStore {
 	store := &SessionStore{
 		sessions: make(map[string]*OAuthSession),
+		stopCh:   make(chan struct{}),
 	}
-	// Start cleanup goroutine
 	go store.cleanup()
 	return store
+}
+
+// Stop stops the cleanup goroutine
+func (s *SessionStore) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 }
 
 // Set stores a session
@@ -70,7 +84,6 @@ func (s *SessionStore) Get(sessionID string) (*OAuthSession, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Check if expired
 	if time.Since(session.CreatedAt) > SessionTTL {
 		return nil, false
 	}
@@ -87,14 +100,20 @@ func (s *SessionStore) Delete(sessionID string) {
 // cleanup removes expired sessions periodically
 func (s *SessionStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
-	for range ticker.C {
-		s.mu.Lock()
-		for id, session := range s.sessions {
-			if time.Since(session.CreatedAt) > SessionTTL {
-				delete(s.sessions, id)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			for id, session := range s.sessions {
+				if time.Since(session.CreatedAt) > SessionTTL {
+					delete(s.sessions, id)
+				}
 			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 	}
 }
 
@@ -108,13 +127,13 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// GenerateState generates a random state string for OAuth
+// GenerateState generates a random state string for OAuth (base64url encoded)
 func GenerateState() (string, error) {
 	bytes, err := GenerateRandomBytes(32)
 	if err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(bytes), nil
+	return base64URLEncode(bytes), nil
 }
 
 // GenerateSessionID generates a unique session ID
@@ -126,7 +145,8 @@ func GenerateSessionID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// GenerateCodeVerifier generates a PKCE code verifier (32 bytes -> base64url)
+// GenerateCodeVerifier generates a PKCE code verifier (RFC 7636).
+// Uses 32 random bytes → base64url-no-pad, producing a 43-char verifier.
 func GenerateCodeVerifier() (string, error) {
 	bytes, err := GenerateRandomBytes(32)
 	if err != nil {
@@ -144,42 +164,31 @@ func GenerateCodeChallenge(verifier string) string {
 // base64URLEncode encodes bytes to base64url without padding
 func base64URLEncode(data []byte) string {
 	encoded := base64.URLEncoding.EncodeToString(data)
-	// Remove padding
 	return strings.TrimRight(encoded, "=")
 }
 
-// BuildAuthorizationURL builds the OAuth authorization URL
+// BuildAuthorizationURL builds the OAuth authorization URL with correct parameter order
 func BuildAuthorizationURL(state, codeChallenge, scope string) string {
-	params := url.Values{}
-	params.Set("response_type", "code")
-	params.Set("client_id", ClientID)
-	params.Set("redirect_uri", RedirectURI)
-	params.Set("scope", scope)
-	params.Set("state", state)
-	params.Set("code_challenge", codeChallenge)
-	params.Set("code_challenge_method", "S256")
+	encodedRedirectURI := url.QueryEscape(RedirectURI)
+	encodedScope := strings.ReplaceAll(url.QueryEscape(scope), "%20", "+")
 
-	return fmt.Sprintf("%s?%s", AuthorizeURL, params.Encode())
-}
-
-// TokenRequest represents the token exchange request body
-type TokenRequest struct {
-	GrantType    string `json:"grant_type"`
-	ClientID     string `json:"client_id"`
-	Code         string `json:"code"`
-	RedirectURI  string `json:"redirect_uri"`
-	CodeVerifier string `json:"code_verifier"`
-	State        string `json:"state"`
+	return fmt.Sprintf("%s?code=true&client_id=%s&response_type=code&redirect_uri=%s&scope=%s&code_challenge=%s&code_challenge_method=S256&state=%s",
+		AuthorizeURL,
+		ClientID,
+		encodedRedirectURI,
+		encodedScope,
+		codeChallenge,
+		state,
+	)
 }
 
 // TokenResponse represents the token response from OAuth provider
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	ExpiresIn    int64  `json:"expires_in"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	Scope        string `json:"scope,omitempty"`
-	// Organization and Account info from OAuth response
+	AccessToken  string       `json:"access_token"`
+	TokenType    string       `json:"token_type"`
+	ExpiresIn    int64        `json:"expires_in"`
+	RefreshToken string       `json:"refresh_token,omitempty"`
+	Scope        string       `json:"scope,omitempty"`
 	Organization *OrgInfo     `json:"organization,omitempty"`
 	Account      *AccountInfo `json:"account,omitempty"`
 }
@@ -191,33 +200,6 @@ type OrgInfo struct {
 
 // AccountInfo represents account info from OAuth response
 type AccountInfo struct {
-	UUID string `json:"uuid"`
-}
-
-// RefreshTokenRequest represents the refresh token request
-type RefreshTokenRequest struct {
-	GrantType    string `json:"grant_type"`
-	RefreshToken string `json:"refresh_token"`
-	ClientID     string `json:"client_id"`
-}
-
-// BuildTokenRequest creates a token exchange request
-func BuildTokenRequest(code, codeVerifier, state string) *TokenRequest {
-	return &TokenRequest{
-		GrantType:    "authorization_code",
-		ClientID:     ClientID,
-		Code:         code,
-		RedirectURI:  RedirectURI,
-		CodeVerifier: codeVerifier,
-		State:        state,
-	}
-}
-
-// BuildRefreshTokenRequest creates a refresh token request
-func BuildRefreshTokenRequest(refreshToken string) *RefreshTokenRequest {
-	return &RefreshTokenRequest{
-		GrantType:    "refresh_token",
-		RefreshToken: refreshToken,
-		ClientID:     ClientID,
-	}
+	UUID         string `json:"uuid"`
+	EmailAddress string `json:"email_address"`
 }

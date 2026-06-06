@@ -18,7 +18,11 @@ import (
 	"strings"
 	"time"
 
-	"sub2api/internal/service/ports"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+)
+
+var (
+	ErrNoUpdateAvailable = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
 )
 
 const (
@@ -34,6 +38,12 @@ const (
 	maxDownloadSize = 500 * 1024 * 1024
 )
 
+// UpdateCache defines cache operations for update service
+type UpdateCache interface {
+	GetUpdateInfo(ctx context.Context) (string, error)
+	SetUpdateInfo(ctx context.Context, data string, ttl time.Duration) error
+}
+
 // GitHubReleaseClient 获取 GitHub release 信息的接口
 type GitHubReleaseClient interface {
 	FetchLatestRelease(ctx context.Context, repo string) (*GitHubRelease, error)
@@ -43,14 +53,14 @@ type GitHubReleaseClient interface {
 
 // UpdateService handles software updates
 type UpdateService struct {
-	cache          ports.UpdateCache
+	cache          UpdateCache
 	githubClient   GitHubReleaseClient
 	currentVersion string
 	buildType      string // "source" for manual builds, "release" for CI builds
 }
 
 // NewUpdateService creates a new UpdateService
-func NewUpdateService(cache ports.UpdateCache, githubClient GitHubReleaseClient, version, buildType string) *UpdateService {
+func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType string) *UpdateService {
 	return &UpdateService{
 		cache:          cache,
 		githubClient:   githubClient,
@@ -75,7 +85,7 @@ type ReleaseInfo struct {
 	Name        string  `json:"name"`
 	Body        string  `json:"body"`
 	PublishedAt string  `json:"published_at"`
-	HtmlURL     string  `json:"html_url"`
+	HTMLURL     string  `json:"html_url"`
 	Assets      []Asset `json:"assets,omitempty"`
 }
 
@@ -92,13 +102,13 @@ type GitHubRelease struct {
 	Name        string        `json:"name"`
 	Body        string        `json:"body"`
 	PublishedAt string        `json:"published_at"`
-	HtmlUrl     string        `json:"html_url"`
+	HTMLURL     string        `json:"html_url"`
 	Assets      []GitHubAsset `json:"assets"`
 }
 
 type GitHubAsset struct {
 	Name               string `json:"name"`
-	BrowserDownloadUrl string `json:"browser_download_url"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 	Size               int64  `json:"size"`
 }
 
@@ -142,7 +152,7 @@ func (s *UpdateService) PerformUpdate(ctx context.Context) error {
 	}
 
 	if !info.HasUpdate {
-		return fmt.Errorf("no update available")
+		return ErrNoUpdateAvailable
 	}
 
 	// Find matching archive and checksum for current platform
@@ -281,7 +291,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 	for i, a := range release.Assets {
 		assets[i] = Asset{
 			Name:        a.Name,
-			DownloadURL: a.BrowserDownloadUrl,
+			DownloadURL: a.BrowserDownloadURL,
 			Size:        a.Size,
 		}
 	}
@@ -294,7 +304,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 			Name:        release.Name,
 			Body:        release.Body,
 			PublishedAt: release.PublishedAt,
-			HtmlURL:     release.HtmlUrl,
+			HTMLURL:     release.HTMLURL,
 			Assets:      assets,
 		},
 		Cached:    false,

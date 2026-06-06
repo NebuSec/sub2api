@@ -1,33 +1,47 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
     <!-- Background -->
-    <div class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"></div>
+    <div
+      class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+    ></div>
 
     <!-- Decorative Elements -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div class="pointer-events-none absolute inset-0 overflow-hidden">
       <!-- Gradient Orbs -->
-      <div class="absolute -top-40 -right-40 w-80 h-80 bg-primary-400/20 rounded-full blur-3xl"></div>
-      <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-primary-500/15 rounded-full blur-3xl"></div>
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-300/10 rounded-full blur-3xl"></div>
+      <div
+        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl"
+      ></div>
+      <div
+        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary-500/15 blur-3xl"
+      ></div>
+      <div
+        class="absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-300/10 blur-3xl"
+      ></div>
 
       <!-- Grid Pattern -->
-      <div class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"></div>
+      <div
+        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+      ></div>
     </div>
 
     <!-- Content Container -->
-    <div class="relative w-full max-w-md z-10">
+    <div class="relative z-10 w-full max-w-md">
       <!-- Logo/Brand -->
-      <div class="text-center mb-8">
+      <div class="mb-8 text-center">
         <!-- Custom Logo or Default Logo -->
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl overflow-hidden shadow-lg shadow-primary-500/30 mb-4">
-          <img :src="siteLogo || '/logo.png'" alt="Logo" class="w-full h-full object-contain" />
-        </div>
-        <h1 class="text-3xl font-bold text-gradient mb-2">
-          {{ siteName }}
-        </h1>
-        <p class="text-sm text-gray-500 dark:text-dark-400">
-          {{ siteSubtitle }}
-        </p>
+        <template v-if="settingsLoaded">
+          <div
+            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+          >
+            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          </div>
+          <h1 class="text-gradient mb-2 text-3xl font-bold">
+            {{ siteName }}
+          </h1>
+          <p class="text-sm text-gray-500 dark:text-dark-400">
+            {{ siteSubtitle }}
+          </p>
+        </template>
       </div>
 
       <!-- Card Container -->
@@ -36,12 +50,12 @@
       </div>
 
       <!-- Footer Links -->
-      <div class="text-center mt-6 text-sm">
+      <div class="mt-6 text-center text-sm">
         <slot name="footer" />
       </div>
 
       <!-- Copyright -->
-      <div class="text-center mt-8 text-xs text-gray-400 dark:text-dark-500">
+      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>
@@ -49,25 +63,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { getPublicSettings } from '@/api/auth';
+import { computed, onMounted } from 'vue'
+import { useAppStore } from '@/stores'
+import { sanitizeUrl } from '@/utils/url'
 
-const siteName = ref('Sub2API');
-const siteLogo = ref('');
-const siteSubtitle = ref('Subscription to API Conversion Platform');
+const appStore = useAppStore()
 
-const currentYear = computed(() => new Date().getFullYear());
+const siteName = computed(() => appStore.siteName || 'Sub2API')
+const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
+const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
-onMounted(async () => {
-  try {
-    const settings = await getPublicSettings();
-    siteName.value = settings.site_name || 'Sub2API';
-    siteLogo.value = settings.site_logo || '';
-    siteSubtitle.value = settings.site_subtitle || 'Subscription to API Conversion Platform';
-  } catch (error) {
-    console.error('Failed to load public settings:', error);
-  }
-});
+const currentYear = computed(() => new Date().getFullYear())
+
+onMounted(() => {
+  appStore.fetchPublicSettings()
+})
 </script>
 
 <style scoped>

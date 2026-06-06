@@ -5,18 +5,26 @@ This directory contains reusable Vue 3 components built with Composition API, Ty
 ## Components
 
 ### DataTable.vue
+
 A generic data table component with sorting, loading states, and custom cell rendering.
 
 **Props:**
+
 - `columns: Column[]` - Array of column definitions with key, label, sortable, and formatter
 - `data: any[]` - Array of data objects to display
 - `loading?: boolean` - Show loading skeleton
+- `defaultSortKey?: string` - Default sort key (only used if no persisted sort state)
+- `defaultSortOrder?: 'asc' | 'desc'` - Default sort order (default: `asc`)
+- `sortStorageKey?: string` - Persist sort state (key + order) to localStorage
+- `rowKey?: string | (row: any) => string | number` - Row key field or resolver (defaults to `row.id`, falls back to index)
 
 **Slots:**
+
 - `empty` - Custom empty state content
 - `cell-{key}` - Custom cell renderer for specific column (receives `row` and `value`)
 
 **Usage:**
+
 ```vue
 <DataTable
   :columns="[
@@ -36,19 +44,23 @@ A generic data table component with sorting, loading states, and custom cell ren
 ---
 
 ### Pagination.vue
+
 Pagination component with page numbers, navigation, and page size selector.
 
 **Props:**
+
 - `total: number` - Total number of items
 - `page: number` - Current page (1-indexed)
 - `pageSize: number` - Items per page
 - `pageSizeOptions?: number[]` - Available page size options (default: [10, 20, 50, 100])
 
 **Events:**
+
 - `update:page` - Emitted when page changes
 - `update:pageSize` - Emitted when page size changes
 
 **Usage:**
+
 ```vue
 <Pagination
   :total="totalUsers"
@@ -62,9 +74,11 @@ Pagination component with page numbers, navigation, and page size selector.
 ---
 
 ### Modal.vue
+
 Modal dialog with customizable size and close behavior.
 
 **Props:**
+
 - `show: boolean` - Control modal visibility
 - `title: string` - Modal title
 - `size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'` - Modal size (default: 'md')
@@ -72,13 +86,16 @@ Modal dialog with customizable size and close behavior.
 - `closeOnClickOutside?: boolean` - Close on backdrop click (default: true)
 
 **Events:**
+
 - `close` - Emitted when modal should close
 
 **Slots:**
+
 - `default` - Modal body content
 - `footer` - Modal footer content
 
 **Usage:**
+
 ```vue
 <Modal :show="showModal" title="Edit User" size="lg" @close="showModal = false">
   <form @submit.prevent="saveUser">
@@ -95,9 +112,11 @@ Modal dialog with customizable size and close behavior.
 ---
 
 ### ConfirmDialog.vue
+
 Confirmation dialog built on top of Modal component.
 
 **Props:**
+
 - `show: boolean` - Control dialog visibility
 - `title: string` - Dialog title
 - `message: string` - Confirmation message
@@ -106,10 +125,12 @@ Confirmation dialog built on top of Modal component.
 - `danger?: boolean` - Use danger/red styling (default: false)
 
 **Events:**
+
 - `confirm` - Emitted when user confirms
 - `cancel` - Emitted when user cancels
 
 **Usage:**
+
 ```vue
 <ConfirmDialog
   :show="showDeleteConfirm"
@@ -126,9 +147,11 @@ Confirmation dialog built on top of Modal component.
 ---
 
 ### StatCard.vue
+
 Statistics card component for displaying metrics with optional change indicators.
 
 **Props:**
+
 - `title: string` - Card title
 - `value: number | string` - Main value to display
 - `icon?: Component` - Icon component
@@ -137,22 +160,19 @@ Statistics card component for displaying metrics with optional change indicators
 - `formatValue?: (value) => string` - Custom value formatter
 
 **Usage:**
+
 ```vue
-<StatCard
-  title="Total Users"
-  :value="1234"
-  :icon="UserIcon"
-  :change="12.5"
-  change-type="up"
-/>
+<StatCard title="Total Users" :value="1234" :icon="UserIcon" :change="12.5" change-type="up" />
 ```
 
 ---
 
 ### Toast.vue
+
 Toast notification component that automatically displays toasts from the app store.
 
 **Usage:**
+
 ```vue
 <!-- Add once in App.vue or layout -->
 <Toast />
@@ -180,13 +200,16 @@ appStore.addToast({
 ---
 
 ### LoadingSpinner.vue
+
 Simple animated loading spinner.
 
 **Props:**
+
 - `size?: 'sm' | 'md' | 'lg' | 'xl'` - Spinner size (default: 'md')
 - `color?: 'primary' | 'secondary' | 'white' | 'gray'` - Spinner color (default: 'primary')
 
 **Usage:**
+
 ```vue
 <LoadingSpinner size="lg" color="primary" />
 ```
@@ -194,9 +217,11 @@ Simple animated loading spinner.
 ---
 
 ### EmptyState.vue
+
 Empty state placeholder with icon, message, and optional action button.
 
 **Props:**
+
 - `icon?: Component` - Icon component
 - `title: string` - Empty state title
 - `description: string` - Empty state description
@@ -205,10 +230,12 @@ Empty state placeholder with icon, message, and optional action button.
 - `actionIcon?: boolean` - Show plus icon in button (default: true)
 
 **Slots:**
+
 - `icon` - Custom icon content
 - `action` - Custom action button/link
 
 **Usage:**
+
 ```vue
 <EmptyState
   title="No users found"
@@ -235,6 +262,7 @@ import DataTable from '@/components/common/DataTable.vue'
 ## Features
 
 All components include:
+
 - **TypeScript support** with proper type definitions
 - **Accessibility** with ARIA attributes and keyboard navigation
 - **Responsive design** with mobile-friendly layouts

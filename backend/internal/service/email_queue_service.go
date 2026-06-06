@@ -3,16 +3,25 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+)
+
+// Task type constants
+const (
+	TaskTypeVerifyCode    = "verify_code"
+	TaskTypePasswordReset = "password_reset"
 )
 
 // EmailTask 邮件发送任务
 type EmailTask struct {
 	Email    string
 	SiteName string
-	TaskType string // "verify_code"
+	TaskType string // "verify_code" or "password_reset"
+	ResetURL string // Only used for password_reset task type
+	Locale   string // Optional Accept-Language locale hint
 }
 
 // EmailQueueService 异步邮件队列服务
@@ -49,7 +58,7 @@ func (s *EmailQueueService) start() {
 		s.wg.Add(1)
 		go s.worker(i)
 	}
-	log.Printf("[EmailQueue] Started %d workers", s.workers)
+	logger.LegacyPrintf("service.email_queue", "[EmailQueue] Started %d workers", s.workers)
 }
 
 // worker 工作协程
@@ -61,7 +70,7 @@ func (s *EmailQueueService) worker(id int) {
 		case task := <-s.taskChan:
 			s.processTask(id, task)
 		case <-s.stopChan:
-			log.Printf("[EmailQueue] Worker %d stopping", id)
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d stopping", id)
 			return
 		}
 	}
@@ -73,28 +82,54 @@ func (s *EmailQueueService) processTask(workerID int, task EmailTask) {
 	defer cancel()
 
 	switch task.TaskType {
-	case "verify_code":
-		if err := s.emailService.SendVerifyCode(ctx, task.Email, task.SiteName); err != nil {
-			log.Printf("[EmailQueue] Worker %d failed to send verify code to %s: %v", workerID, task.Email, err)
+	case TaskTypeVerifyCode:
+		if err := s.emailService.SendVerifyCode(ctx, task.Email, task.SiteName, task.Locale); err != nil {
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send verify code to %s: %v", workerID, task.Email, err)
 		} else {
-			log.Printf("[EmailQueue] Worker %d sent verify code to %s", workerID, task.Email)
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent verify code to %s", workerID, task.Email)
+		}
+	case TaskTypePasswordReset:
+		if err := s.emailService.SendPasswordResetEmailWithCooldown(ctx, task.Email, task.SiteName, task.ResetURL, task.Locale); err != nil {
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d failed to send password reset to %s: %v", workerID, task.Email, err)
+		} else {
+			logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d sent password reset to %s", workerID, task.Email)
 		}
 	default:
-		log.Printf("[EmailQueue] Worker %d unknown task type: %s", workerID, task.TaskType)
+		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Worker %d unknown task type: %s", workerID, task.TaskType)
 	}
 }
 
 // EnqueueVerifyCode 将验证码发送任务加入队列
-func (s *EmailQueueService) EnqueueVerifyCode(email, siteName string) error {
+func (s *EmailQueueService) EnqueueVerifyCode(email, siteName string, locale ...string) error {
 	task := EmailTask{
 		Email:    email,
 		SiteName: siteName,
-		TaskType: "verify_code",
+		TaskType: TaskTypeVerifyCode,
+		Locale:   firstEmailLocale(locale),
 	}
 
 	select {
 	case s.taskChan <- task:
-		log.Printf("[EmailQueue] Enqueued verify code task for %s", email)
+		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Enqueued verify code task for %s", email)
+		return nil
+	default:
+		return fmt.Errorf("email queue is full")
+	}
+}
+
+// EnqueuePasswordReset 将密码重置邮件任务加入队列
+func (s *EmailQueueService) EnqueuePasswordReset(email, siteName, resetURL string, locale ...string) error {
+	task := EmailTask{
+		Email:    email,
+		SiteName: siteName,
+		TaskType: TaskTypePasswordReset,
+		ResetURL: resetURL,
+		Locale:   firstEmailLocale(locale),
+	}
+
+	select {
+	case s.taskChan <- task:
+		logger.LegacyPrintf("service.email_queue", "[EmailQueue] Enqueued password reset task for %s", email)
 		return nil
 	default:
 		return fmt.Errorf("email queue is full")
@@ -105,5 +140,5 @@ func (s *EmailQueueService) EnqueueVerifyCode(email, siteName string) error {
 func (s *EmailQueueService) Stop() {
 	close(s.stopChan)
 	s.wg.Wait()
-	log.Println("[EmailQueue] All workers stopped")
+	logger.LegacyPrintf("service.email_queue", "%s", "[EmailQueue] All workers stopped")
 }
