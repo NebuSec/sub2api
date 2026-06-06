@@ -57,6 +57,10 @@ func writeResponsesFailedSSE(c *gin.Context, errType, message string) bool {
 	if !ok {
 		return false
 	}
+	code := mapResponsesErrorCode(errType)
+	if structuredCode := strings.TrimSpace(c.Writer.Header().Get(billingErrorCodeHeader)); structuredCode != "" {
+		code = structuredCode
+	}
 
 	payload, err := json.Marshal(responsesFailedEvent{
 		Type: "response.failed",
@@ -67,7 +71,7 @@ func writeResponsesFailedSSE(c *gin.Context, errType, message string) bool {
 			Status: "failed",
 			Output: []any{},
 			Error: responsesFailedError{
-				Code:    mapResponsesErrorCode(errType),
+				Code:    code,
 				Message: message,
 			},
 		},
