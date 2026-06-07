@@ -4386,9 +4386,15 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		errType = "rate_limit_error"
 		errMsg = "Upstream rate limit exceeded, please retry later"
 	default:
-		statusCode = http.StatusBadGateway
-		errType = "upstream_error"
-		errMsg = "Upstream request failed"
+		contentType := "application/json"
+		if upstreamContentType := strings.TrimSpace(resp.Header.Get("Content-Type")); upstreamContentType != "" {
+			contentType = upstreamContentType
+		}
+		c.Data(resp.StatusCode, contentType, body)
+		if upstreamMsg == "" {
+			return nil, fmt.Errorf("upstream error: %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
 	}
 
 	c.JSON(statusCode, gin.H{
