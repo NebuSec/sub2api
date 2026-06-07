@@ -133,6 +133,49 @@ func TestOpenAIHandleStreamingAwareError_NonStreaming(t *testing.T) {
 	assert.Equal(t, "test error", errorObj["message"])
 }
 
+func TestOpenAIHandleFailoverExhausted_PassthroughLastUpstreamError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, EndpointResponses, nil)
+
+	body := []byte(`{"error":{"type":"invalid_request_error","code":"invalid_schema","message":"Invalid schema","param":"input"}}`)
+	failoverErr := &service.UpstreamFailoverError{
+		StatusCode:   http.StatusUnprocessableEntity,
+		ResponseBody: body,
+		ResponseHeaders: http.Header{
+			"Content-Type": []string{"application/problem+json"},
+		},
+	}
+
+	h := &OpenAIGatewayHandler{}
+	h.handleFailoverExhausted(c, failoverErr, false)
+
+	require.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	require.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
+	require.Equal(t, body, w.Body.Bytes())
+}
+
+func TestOpenAIHandleFailoverExhausted_StreamKeepsProtocolError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, EndpointResponses, nil)
+
+	body := []byte(`{"error":{"type":"invalid_request_error","code":"invalid_schema","message":"Invalid schema"}}`)
+	failoverErr := &service.UpstreamFailoverError{
+		StatusCode:   http.StatusUnprocessableEntity,
+		ResponseBody: body,
+	}
+
+	h := &OpenAIGatewayHandler{}
+	h.handleFailoverExhausted(c, failoverErr, true)
+
+	require.NotEqual(t, string(body), w.Body.String())
+	require.Contains(t, w.Body.String(), `"type":"response.failed"`)
+	require.Contains(t, w.Body.String(), `"message":"Upstream request failed"`)
+}
+
 func TestReadRequestBodyWithPrealloc(t *testing.T) {
 	payload := `{"model":"gpt-5","input":"hello"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(payload))

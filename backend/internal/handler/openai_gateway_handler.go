@@ -1774,6 +1774,21 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 		return
 	}
 
+	// Failover 已耗尽且尚未开始流式响应时，直接返回最后一次上游错误，
+	// 保留完整错误结构，方便客户端定位请求或 schema 问题。
+	if !streamStarted && len(responseBody) > 0 {
+		upstreamMsg := service.ExtractUpstreamErrorMessage(responseBody)
+		service.SetOpsUpstreamError(c, statusCode, upstreamMsg, "")
+		contentType := "application/json"
+		if failoverErr.ResponseHeaders != nil {
+			if upstreamContentType := strings.TrimSpace(failoverErr.ResponseHeaders.Get("Content-Type")); upstreamContentType != "" {
+				contentType = upstreamContentType
+			}
+		}
+		c.Data(statusCode, contentType, responseBody)
+		return
+	}
+
 	// 先检查透传规则
 	if h.errorPassthroughService != nil && len(responseBody) > 0 {
 		if rule := h.errorPassthroughService.MatchRule("openai", statusCode, responseBody); rule != nil {
